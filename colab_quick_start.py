@@ -40,8 +40,29 @@ def install_dependencies():
     """安装依赖"""
     print_step(2, "安装依赖包")
     
+    # 检测是否在Colab环境
+    try:
+        import google.colab
+        IN_COLAB = True
+        print("✅ 检测到Colab环境")
+    except:
+        IN_COLAB = False
+        print("⚠️  本地环境")
+    
+    # Colab环境下faiss-gpu需要特殊安装
+    if IN_COLAB:
+        print("安装 faiss-gpu (Colab)...")
+        # Colab已经预装了faiss，或者使用conda
+        result = subprocess.run("pip install -q faiss-gpu", shell=True, capture_output=True)
+        if result.returncode != 0:
+            print("⚠️  faiss-gpu安装失败，尝试faiss-cpu...")
+            subprocess.run("pip install -q faiss-cpu", shell=True)
+    else:
+        print("安装 faiss-gpu...")
+        subprocess.run("pip install -q faiss-gpu", shell=True)
+    
+    # 其他包
     packages = [
-        "faiss-gpu",
         "h5py",
         "pillow",
         "tqdm",
@@ -57,10 +78,17 @@ def install_dependencies():
     print("\n✅ 所有依赖已安装")
     
     # 验证
-    import torch
-    import faiss
-    print(f"✅ PyTorch: {torch.__version__}")
-    print(f"✅ Faiss: {faiss.__version__}")
+    try:
+        import torch
+        print(f"✅ PyTorch: {torch.__version__}")
+    except:
+        print("❌ PyTorch未安装")
+    
+    try:
+        import faiss
+        print(f"✅ Faiss: {faiss.__version__}")
+    except:
+        print("⚠️  Faiss未安装（可能需要手动安装）")
 
 def check_datasets():
     """检查数据集"""
