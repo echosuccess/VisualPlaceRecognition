@@ -18,8 +18,8 @@ The following commands are meant to be run locally. If you plan to use Colab, up
 ## Install the repo
 
 ```sh
-#git clone --recursive https://github.com/FarInHeight/
-git clone --recursive https://github.com/echosuccess/VisualPlaceRecognition.gitVisual-Place-Recognition-Project.git
+
+git clone --recursive https://github.com/echosuccess/VisualPlaceRecognition.git
 ```
 
 ## Install dependencies
