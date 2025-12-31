@@ -120,8 +120,22 @@ class ResNet(nn.Module):
 
 
 class MixVPRModel(torch.nn.Module):
-    def __init__(self, agg_config={}):
+    def __init__(self, agg_config={}, backbone=None, descriptors_dimension=None):
         super().__init__()
+        
+        # 如果提供了descriptors_dimension，使用它来配置模型
+        if descriptors_dimension is not None and descriptors_dimension in MODELS_INFO:
+            _, _, out_channels, out_rows = MODELS_INFO[descriptors_dimension]
+            agg_config = {
+                "in_channels": 1024,
+                "in_h": 20,
+                "in_w": 20,
+                "out_channels": out_channels,
+                "mix_depth": 4,
+                "mlp_ratio": 1,
+                "out_rows": out_rows,
+            }
+        
         self.backbone = ResNet()
         self.aggregator = MixVPR(**agg_config)
 

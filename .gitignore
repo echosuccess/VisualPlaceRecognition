@@ -1,6 +1,6 @@
 mydoc/
 data/
-logs/logs/
+logs/logs/baseline
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
