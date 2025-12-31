@@ -1,0 +1,322 @@
+{
+  "cosplace_sf_xs_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 63.1,
+        "R@5": 74.8,
+        "R@10": 78.6,
+        "R@20": 81.3
+      },
+      "path": "logs\\baseline\\cosplace_dot_product_sf_xs_test\\2025-12-31_15-03-18"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 63.1,
+        "R@5": 74.8,
+        "R@10": 78.6,
+        "R@20": 81.3
+      },
+      "path": "logs\\baseline\\cosplace_l2_sf_xs_test\\2025-12-31_14-59-31"
+    }
+  },
+  "cosplace_svox_night_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 33.3,
+        "R@5": 51.5,
+        "R@10": 59.1,
+        "R@20": 67.7
+      },
+      "path": "logs\\baseline\\cosplace_dot_product_svox_night_test\\2025-12-31_15-27-46"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 33.3,
+        "R@5": 51.5,
+        "R@10": 59.1,
+        "R@20": 67.7
+      },
+      "path": "logs\\baseline\\cosplace_l2_svox_night_test\\2025-12-31_15-24-16"
+    }
+  },
+  "cosplace_svox_sun_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 96.3,
+        "R@5": 97.9,
+        "R@10": 98.3,
+        "R@20": 98.7
+      },
+      "path": "logs\\baseline\\cosplace_dot_product_svox_sun_test\\2025-12-31_15-18-40"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 96.3,
+        "R@5": 97.9,
+        "R@10": 98.3,
+        "R@20": 98.7
+      },
+      "path": "logs\\baseline\\cosplace_l2_svox_sun_test\\2025-12-31_15-13-37"
+    }
+  },
+  "cosplace_tokyo_xs_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 64.8,
+        "R@5": 79.7,
+        "R@10": 86.0,
+        "R@20": 89.5
+      },
+      "path": "logs\\baseline\\cosplace_dot_product_tokyo_xs_test\\2025-12-31_15-11-08"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 64.8,
+        "R@5": 79.7,
+        "R@10": 86.0,
+        "R@20": 89.5
+      },
+      "path": "logs\\baseline\\cosplace_l2_tokyo_xs_test\\2025-12-31_15-08-38"
+    }
+  },
+  "megaloc_sf_xs_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 85.6,
+        "R@5": 89.4,
+        "R@10": 90.0,
+        "R@20": 90.7
+      },
+      "path": "logs\\baseline\\megaloc_dot_product_sf_xs_test\\2025-12-31_19-22-00"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 85.6,
+        "R@5": 89.4,
+        "R@10": 90.0,
+        "R@20": 90.7
+      },
+      "path": "logs\\baseline\\megaloc_l2_sf_xs_test\\2025-12-31_19-12-43"
+    }
+  },
+  "megaloc_svox_night_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 91.5,
+        "R@5": 96.7,
+        "R@10": 97.6,
+        "R@20": 98.3
+      },
+      "path": "logs\\baseline\\megaloc_dot_product_svox_night_test\\2025-12-31_19-59-02"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 91.5,
+        "R@5": 96.7,
+        "R@10": 97.6,
+        "R@20": 98.3
+      },
+      "path": "logs\\baseline\\megaloc_l2_svox_night_test\\2025-12-31_19-54-14"
+    }
+  },
+  "megaloc_svox_sun_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 98.5,
+        "R@5": 99.4,
+        "R@10": 99.6,
+        "R@20": 99.7
+      },
+      "path": "logs\\baseline\\megaloc_dot_product_svox_sun_test\\2025-12-31_19-45-30"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 98.5,
+        "R@5": 99.4,
+        "R@10": 99.6,
+        "R@20": 99.7
+      },
+      "path": "logs\\baseline\\megaloc_l2_svox_sun_test\\2025-12-31_19-36-43"
+    }
+  },
+  "megaloc_tokyo_xs_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 94.9,
+        "R@5": 97.8,
+        "R@10": 98.4,
+        "R@20": 98.7
+      },
+      "path": "logs\\baseline\\megaloc_dot_product_tokyo_xs_test\\2025-12-31_19-33-11"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 94.9,
+        "R@5": 97.8,
+        "R@10": 98.4,
+        "R@20": 98.7
+      },
+      "path": "logs\\baseline\\megaloc_l2_tokyo_xs_test\\2025-12-31_19-29-41"
+    }
+  },
+  "mixvpr_sf_xs_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 70.2,
+        "R@5": 79.0,
+        "R@10": 81.3,
+        "R@20": 83.9
+      },
+      "path": "logs\\baseline\\mixvpr_dot_product_sf_xs_test\\2025-12-31_20-12-31"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 70.2,
+        "R@5": 79.0,
+        "R@10": 81.3,
+        "R@20": 83.9
+      },
+      "path": "logs\\baseline\\mixvpr_l2_sf_xs_test\\2025-12-31_20-06-55"
+    }
+  },
+  "mixvpr_svox_night_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 63.1,
+        "R@5": 79.8,
+        "R@10": 84.1,
+        "R@20": 88.0
+      },
+      "path": "logs\\baseline\\mixvpr_dot_product_svox_night_test\\2025-12-31_20-39-07"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 63.1,
+        "R@5": 79.8,
+        "R@10": 84.1,
+        "R@20": 88.0
+      },
+      "path": "logs\\baseline\\mixvpr_l2_svox_night_test\\2025-12-31_20-35-30"
+    }
+  },
+  "mixvpr_svox_sun_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 97.8,
+        "R@5": 98.9,
+        "R@10": 99.1,
+        "R@20": 99.3
+      },
+      "path": "logs\\baseline\\mixvpr_dot_product_svox_sun_test\\2025-12-31_20-29-27"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 97.8,
+        "R@5": 98.9,
+        "R@10": 99.1,
+        "R@20": 99.3
+      },
+      "path": "logs\\baseline\\mixvpr_l2_svox_sun_test\\2025-12-31_20-23-31"
+    }
+  },
+  "mixvpr_tokyo_xs_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 77.8,
+        "R@5": 89.5,
+        "R@10": 92.4,
+        "R@20": 93.7
+      },
+      "path": "logs\\baseline\\mixvpr_dot_product_tokyo_xs_test\\2025-12-31_20-20-48"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 77.8,
+        "R@5": 89.5,
+        "R@10": 92.4,
+        "R@20": 93.7
+      },
+      "path": "logs\\baseline\\mixvpr_l2_tokyo_xs_test\\2025-12-31_20-18-05"
+    }
+  },
+  "netvlad_sf_xs_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 42.3,
+        "R@5": 53.7,
+        "R@10": 60.8,
+        "R@20": 65.2
+      },
+      "path": "logs\\baseline\\netvlad_dot_product_sf_xs_test\\2025-12-31_17-19-07"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 42.3,
+        "R@5": 53.7,
+        "R@10": 60.8,
+        "R@20": 65.2
+      },
+      "path": "logs\\baseline\\netvlad_l2_sf_xs_test\\2025-12-31_17-06-41"
+    }
+  },
+  "netvlad_svox_night_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 8.5,
+        "R@5": 18.2,
+        "R@10": 22.7,
+        "R@20": 29.5
+      },
+      "path": "logs\\baseline\\netvlad_dot_product_svox_night_test\\2025-12-31_18-12-16"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 8.5,
+        "R@5": 18.2,
+        "R@10": 22.7,
+        "R@20": 29.5
+      },
+      "path": "logs\\baseline\\netvlad_l2_svox_night_test\\2025-12-31_18-04-48"
+    }
+  },
+  "netvlad_svox_sun_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 86.6,
+        "R@5": 93.7,
+        "R@10": 95.5,
+        "R@20": 97.0
+      },
+      "path": "logs\\baseline\\netvlad_dot_product_svox_sun_test\\2025-12-31_17-52-56"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 86.6,
+        "R@5": 93.7,
+        "R@10": 95.5,
+        "R@20": 97.0
+      },
+      "path": "logs\\baseline\\netvlad_l2_svox_sun_test\\2025-12-31_17-41-06"
+    }
+  },
+  "netvlad_tokyo_xs_test": {
+    "dot_product": {
+      "recalls": {
+        "R@1": 54.0,
+        "R@5": 64.4,
+        "R@10": 69.5,
+        "R@20": 74.6
+      },
+      "path": "logs\\baseline\\netvlad_dot_product_tokyo_xs_test\\2025-12-31_17-35-47"
+    },
+    "l2": {
+      "recalls": {
+        "R@1": 54.0,
+        "R@5": 64.4,
+        "R@10": 69.5,
+        "R@20": 74.6
+      },
+      "path": "logs\\baseline\\netvlad_l2_tokyo_xs_test\\2025-12-31_17-30-23"
+    }
+  }
+}
