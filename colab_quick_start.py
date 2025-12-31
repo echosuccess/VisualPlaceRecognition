@@ -68,7 +68,8 @@ def install_dependencies():
         "tqdm",
         "scikit-learn",
         "gdown",
-        "kornia"
+        "kornia",
+        "loguru"
     ]
     
     for pkg in packages:
