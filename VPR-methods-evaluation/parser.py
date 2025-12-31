@@ -74,6 +74,9 @@ def parse_arguments():
         "--num_preds_to_save", type=int, default=0, help="set != 0 if you want to save predictions for each query"
     )
     parser.add_argument(
+        "--max_queries_to_save", type=int, default=None, help="if set, only save visualizations for the first N queries (useful for Colab to save storage)"
+    )
+    parser.add_argument(
         "--save_only_wrong_preds",
         action="store_true",
         help="set to true if you want to save predictions only for " "wrongly predicted queries",
@@ -95,6 +98,13 @@ def parse_arguments():
         "--save_for_uncertainty",
         action="store_true",
         help="set to True if you want to save the data for uncertainty estimation",
+    )
+    parser.add_argument(
+        "--distance_metric",
+        type=str,
+        default="l2",
+        choices=["l2", "dot_product"],
+        help="Distance metric for K-NN search: l2 (Euclidean) or dot_product (Inner Product)",
     )
     args = parser.parse_args()
 

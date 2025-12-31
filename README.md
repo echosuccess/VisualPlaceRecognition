@@ -18,7 +18,8 @@ The following commands are meant to be run locally. If you plan to use Colab, up
 ## Install the repo
 
 ```sh
-git clone --recursive https://github.com/FarInHeight/Visual-Place-Recognition-Project.git
+#git clone --recursive https://github.com/FarInHeight/
+git clone --recursive https://github.com/echosuccess/VisualPlaceRecognition.gitVisual-Place-Recognition-Project.git
 ```
 
 ## Install dependencies
@@ -80,3 +81,8 @@ python -m vpr_uncertainty.eval \
 --inliers-dir '<path-to-inliers-folder>' \
 --z-data-path '<path-to-z-data-file>'
 ```
+
+
+
+Version：
+ python 3.11.6

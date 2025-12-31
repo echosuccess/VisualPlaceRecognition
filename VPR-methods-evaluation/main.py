@@ -74,7 +74,17 @@ def main(args):
         np.save(log_dir / "database_descriptors.npy", database_descriptors)
 
     # Use a kNN to find predictions
-    faiss_index = faiss.IndexFlatL2(args.descriptors_dimension)
+    logger.info(f"Using distance metric: {args.distance_metric}")
+    if args.distance_metric == "l2":
+        faiss_index = faiss.IndexFlatL2(args.descriptors_dimension)
+    elif args.distance_metric == "dot_product":
+        faiss_index = faiss.IndexFlatIP(args.descriptors_dimension)  # Inner Product (dot product)
+        # Normalize descriptors for cosine similarity (optional, improves performance)
+        faiss.normalize_L2(database_descriptors)
+        faiss.normalize_L2(queries_descriptors)
+    else:
+        raise ValueError(f"Unknown distance metric: {args.distance_metric}")
+    
     faiss_index.add(database_descriptors)
     del database_descriptors, all_descriptors
 
@@ -98,10 +108,13 @@ def main(args):
 
     # Save visualizations of predictions
     if args.num_preds_to_save != 0:
-        logger.info("Saving final predictions")
+        if args.max_queries_to_save is not None:
+            logger.info(f"Saving predictions for first {args.max_queries_to_save} queries only")
+        else:
+            logger.info("Saving final predictions")
         # For each query save num_preds_to_save predictions
         visualizations.save_preds(
-            predictions[:, : args.num_preds_to_save], test_ds, log_dir, args.save_only_wrong_preds, args.use_labels
+            predictions[:, : args.num_preds_to_save], test_ds, log_dir, args.save_only_wrong_preds, args.use_labels, args.max_queries_to_save
         )
 
     if args.save_for_uncertainty:

@@ -89,7 +89,7 @@ def save_file_with_paths(query_path, preds_paths, positives_paths, output_path, 
         _ = file.write("\n".join(file_content))
 
 
-def save_preds(predictions, eval_ds, log_dir, save_only_wrong_preds=None, use_labels=True):
+def save_preds(predictions, eval_ds, log_dir, save_only_wrong_preds=None, use_labels=True, max_queries_to_save=None):
     """For each query, save an image containing the query and its predictions,
     and a file with the paths of the query, its predictions and its positives.
 
@@ -101,13 +101,18 @@ def save_preds(predictions, eval_ds, log_dir, save_only_wrong_preds=None, use_la
     log_dir : Path with the path to save the predictions
     save_only_wrong_preds : bool, if True save only the wrongly predicted queries,
         i.e. the ones where the first pred is uncorrect (further than 25 m)
+    max_queries_to_save : int, if set, only save visualizations for the first N queries
     """
     if use_labels:
         positives_per_query = eval_ds.get_positives()
 
     viz_dir = log_dir / "preds"
     viz_dir.mkdir()
-    for query_index, preds in enumerate(tqdm(predictions, desc=f"Saving preds in {viz_dir}")):
+    
+    # Limit the number of queries to save if specified
+    predictions_to_save = predictions[:max_queries_to_save] if max_queries_to_save is not None else predictions
+    
+    for query_index, preds in enumerate(tqdm(predictions_to_save, desc=f"Saving preds in {viz_dir}")):
         query_path = eval_ds.queries_paths[query_index]
         list_of_images_paths = [query_path]
         # List of None (query), True (correct preds) or False (wrong preds)

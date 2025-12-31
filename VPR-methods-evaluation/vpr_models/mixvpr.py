@@ -95,6 +95,30 @@ class MixVPR(nn.Module):
 ### (academic purpose)
 
 
+class ResNet(nn.Module):
+    """ResNet-50 backbone for MixVPR (only layer1-3, no layer4)"""
+    def __init__(self):
+        super().__init__()
+        # Load pretrained ResNet-50 from torchvision
+        self.model = torchvision.models.resnet50(pretrained=True)
+        # Remove layer4, avgpool and fc layers (MixVPR only uses layer1-3)
+        self.model.layer4 = nn.Identity()
+        self.model.avgpool = nn.Identity()
+        self.model.fc = nn.Identity()
+        
+    def forward(self, x):
+        x = self.model.conv1(x)
+        x = self.model.bn1(x)
+        x = self.model.relu(x)
+        x = self.model.maxpool(x)
+        x = self.model.layer1(x)
+        x = self.model.layer2(x)
+        x = self.model.layer3(x)
+        # Note: layer4 is Identity, so it just passes through
+        x = self.model.layer4(x)
+        return x
+
+
 class MixVPRModel(torch.nn.Module):
     def __init__(self, agg_config={}):
         super().__init__()
