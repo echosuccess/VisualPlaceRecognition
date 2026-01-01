@@ -30,12 +30,17 @@ def load_vpr_predictions(log_dir):
     
     data = torch.load(data_file, map_location='cpu', weights_only=False)
     
-    # data包含：
-    # - predictions: (num_queries, K) - top-K预测的database索引
+    # VPR保存的data包含：
+    # - predictions: (num_queries, K) - top-K预测的database索引  
     # - distances: (num_queries, K) - 对应的距离/相似度
-    # - ground_truth: (num_queries,) - 正确的database索引
-    # - database_paths: (num_database,) - database图像路径
-    # - queries_paths: (num_queries,) - query图像路径
+    # - positives_per_query: list of lists - 每个query的所有正确匹配
+    # - database_utms: database的UTM坐标
+    
+    # 需要从positives_per_query推断ground_truth（取第一个positive）
+    if 'positives_per_query' in data:
+        ground_truth = torch.tensor([pos[0] if len(pos) > 0 else -1 
+                                     for pos in data['positives_per_query']])
+        data['ground_truth'] = ground_truth
     
     return data
 
@@ -63,13 +68,15 @@ def run_image_matching(matcher, query_path, database_path, device='cuda'):
         return 0
 
 
-def process_vpr_experiment(vpr_log_dir, matcher, top_k=20, device='cuda'):
+def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder, top_k=20, device='cuda'):
     """
     处理一个VPR实验，对所有query运行Image Matching
     
     Args:
         vpr_log_dir: VPR实验日志目录
         matcher: Image Matching模型
+        database_folder: database图像文件夹路径
+        queries_folder: queries图像文件夹路径
         top_k: 对前K个预测运行匹配
         device: 设备
     
@@ -85,8 +92,10 @@ def process_vpr_experiment(vpr_log_dir, matcher, top_k=20, device='cuda'):
     
     predictions = vpr_data['predictions']  # (num_queries, K)
     ground_truth = vpr_data['ground_truth']  # (num_queries,)
-    database_paths = vpr_data['database_paths']  # (num_database,)
-    queries_paths = vpr_data['queries_paths']  # (num_queries,)
+    
+    # 2. 从文件系统获取图像路径
+    database_paths = sorted(Path(database_folder).glob("*.jpg"))
+    queries_paths = sorted(Path(queries_folder).glob("*.jpg"))
     
     num_queries = len(queries_paths)
     K = min(top_k, predictions.shape[1])
@@ -279,10 +288,29 @@ def main():
     matcher = get_matcher(args.matcher, device=args.device)
     print(f"[OK] Matcher loaded")
     
-    # 3. 运行Image Matching
+    # 3. 构建数据路径（根据VPR方法和数据集）
+    # 根据dataset参数推断database和queries路径
+    dataset_base = f"data/{args.dataset.replace('_test', '')}"
+    if 'svox' in args.dataset:
+        if 'night' in args.dataset:
+            database_folder = f"{dataset_base}/images/test/gallery"
+            queries_folder = f"{dataset_base}/images/test/queries_night"
+        else:  # sun
+            database_folder = f"{dataset_base}/images/test/gallery"
+            queries_folder = f"{dataset_base}/images/test/queries"
+    else:
+        database_folder = f"{dataset_base}/test/database"
+        queries_folder = f"{dataset_base}/test/queries"
+    
+    print(f"Database folder: {database_folder}")
+    print(f"Queries folder: {queries_folder}")
+    
+    # 运行Image Matching
     results = process_vpr_experiment(
         vpr_log_dir=vpr_log_dir,
         matcher=matcher,
+        database_folder=database_folder,
+        queries_folder=queries_folder,
         top_k=args.top_k,
         device=args.device
     )
