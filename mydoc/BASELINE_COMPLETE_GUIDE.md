@@ -263,12 +263,14 @@ python run_all_image_matching.py --device cuda
 
 ### 方法C：在Colab上运行 ⭐ **推荐用Colab**
 
-#### 为什么推荐Colab？
+#### 为什么推荐Colab Pro？
 
-- ✅ 免费GPU（T4/L4）
-- ✅ 可以后台运行（关闭浏览器继续跑）
-- ✅ 结果自动保存到Google Drive
-- ✅ 不占用本地资源
+- ✅ **优质GPU**（T4/V100/A100，比免费版更好）
+- ✅ **24小时运行时间**（足够跑完所有实验）
+- ✅ **后台运行**（关闭浏览器继续跑）
+- ✅ **结果自动保存**到Google Drive
+- ✅ **不占用本地资源**
+- ✅ **更少中断**，运行更稳定
 
 #### Colab完整步骤
 
@@ -344,25 +346,28 @@ display(Image('results/image_matching/discrimination_ratio.png'))
 #### ⚠️ Colab注意事项
 
 **时间限制**：
-- Colab免费版：最多12小时运行时间
-- 如果实验超过12小时，需要分批运行
-- Colab Pro：24小时
+- Colab Pro：最多24小时运行时间
+- 完整实验（6-12小时）完全没问题
+- 可以一次性跑完所有实验
 
-**分批运行策略**（如果需要）：
+**分批运行策略**（通常不需要，Colab Pro的24小时足够）：
 
+如果实验特别多或想更快完成，可以分批：
 ```python
 # 第一批：只运行SuperGlue
 # 修改run_all_image_matching.py中的IMAGE_MATCHERS = ['superglue']
 !python run_all_image_matching.py --device cuda
 
-# 第二批：运行LoFTR（新开一个会话）
+# 第二批：运行LoFTR（新开一个会话，可并行）
 # 修改IMAGE_MATCHERS = ['loftr']
 !python run_all_image_matching.py --device cuda
 
-# 第三批：运行SuperPoint-LG
+# 第三批：运行SuperPoint-LG（新开一个会话，可并行）
 # 修改IMAGE_MATCHERS = ['superpoint-lg']
 !python run_all_image_matching.py --device cuda
 ```
+
+💡 **Colab Pro技巧**：可以同时开3个笔记本并行运行3个matcher，大幅缩短时间！
 
 **保持连接**：
 ```python
@@ -389,12 +394,21 @@ import shutil
 files.download('image_matching_results.zip')
 ```
 
-#### 🎯 Colab推荐工作流
+#### 🎯 Colab Pro推荐工作流
 
-1. **上午**：运行快速测试，确认环境正常
-2. **下午**：启动完整实验
-3. **晚上**：让Colab继续运行（可以关闭浏览器）
-4. **第二天**：查看结果，运行分析
+**方案A：一次性跑完（推荐）**
+1. **设置环境**（10分钟）
+2. **运行快速测试**（5-10分钟）- 确认正常
+3. **启动完整实验**（6-12小时）
+4. **关闭浏览器**，让它后台运行
+5. **第二天查看**结果和分析
+
+**方案B：并行加速（如果着急）**
+1. **开3个Colab笔记本**
+2. 每个笔记本运行1个matcher（SuperGlue/LoFTR/SuperPoint-LG）
+3. **2-4小时全部完成**！
+
+💪 **Colab Pro的优势**：24小时 + 后台运行 = 完全不用担心时间问题！
 
 ---
 
