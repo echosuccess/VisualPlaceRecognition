@@ -28,7 +28,7 @@ def load_vpr_predictions(log_dir):
     if not data_file.exists():
         raise FileNotFoundError(f"Data file not found: {data_file}")
     
-    data = torch.load(data_file, map_location='cpu')
+    data = torch.load(data_file, map_location='cpu', weights_only=False)
     
     # data包含：
     # - predictions: (num_queries, K) - top-K预测的database索引
