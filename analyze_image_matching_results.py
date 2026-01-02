@@ -31,6 +31,8 @@ def load_all_results(results_dir="results/image_matching"):
     result_files = [f for f in result_files if 'summary' not in f.name]
     
     print(f"Found {len(result_files)} result files")
+    print(f"\nChecking each file...")
+    print(f"{'='*80}")
     
     for result_file in result_files:
         # 解析文件名: matcher_vpr_distance_dataset.json
@@ -49,6 +51,7 @@ def load_all_results(results_dir="results/image_matching"):
                 dataset = '_'.join(parts[3:])
             
             # 尝试加载JSON文件
+            print(f"\n📄 File: {result_file.name}")
             try:
                 with open(result_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
@@ -59,15 +62,19 @@ def load_all_results(results_dir="results/image_matching"):
                 
                 key = (matcher, vpr_method, dataset)
                 all_results[key] = data
-                print(f"  [OK] Loaded: {result_file.name}")
+                print(f"  ✅ [OK] Successfully loaded")
                 
             except json.JSONDecodeError as e:
-                print(f"  [ERROR] JSON decode error in {result_file.name}: {e}")
-                print(f"  [INFO] Attempting to recover from pickle file...")
+                print(f"  ❌ [ERROR] JSON decode error!")
+                print(f"     Error: {e}")
+                print(f"     File: {result_file}")
+                print(f"     Line: {e.lineno if hasattr(e, 'lineno') else 'unknown'}, Column: {e.colno if hasattr(e, 'colno') else 'unknown'}")
+                print(f"  🔧 [INFO] Attempting to recover from pickle file...")
                 
                 # 尝试从pickle文件恢复
                 pkl_file = result_file.with_suffix('.pkl')
                 if pkl_file.exists():
+                    print(f"     Found pickle: {pkl_file.name}")
                     try:
                         with open(pkl_file, 'rb') as f:
                             pkl_data = pickle.load(f)
@@ -80,31 +87,45 @@ def load_all_results(results_dir="results/image_matching"):
                         
                         # 尝试重新保存为JSON
                         try:
+                            # 备份原文件
+                            backup_file = result_file.with_suffix('.json.bak')
+                            if result_file.exists():
+                                import shutil
+                                shutil.copy2(result_file, backup_file)
+                                print(f"     Backed up corrupted file to: {backup_file.name}")
+                            
                             with open(result_file, 'w', encoding='utf-8') as f:
                                 json.dump(data, f, indent=2, ensure_ascii=False)
-                            print(f"  [OK] Recovered and saved: {result_file.name}")
+                            print(f"  ✅ [RECOVERED] Successfully recovered and saved!")
                             
                             key = (matcher, vpr_method, dataset)
                             all_results[key] = data
                         except Exception as save_error:
-                            print(f"  [WARN] Could not save recovered JSON: {save_error}")
-                            print(f"  [INFO] Using pickle data directly...")
+                            print(f"  ⚠️  [WARN] Could not save recovered JSON: {save_error}")
+                            print(f"     Using pickle data directly...")
                             # 使用pickle数据，但需要转换格式
                             key = (matcher, vpr_method, dataset)
                             all_results[key] = data
                     except Exception as pkl_error:
-                        print(f"  [ERROR] Failed to load pickle: {pkl_error}")
-                        print(f"  [SKIP] Skipping {result_file.name}")
+                        print(f"  ❌ [ERROR] Failed to load pickle: {pkl_error}")
+                        print(f"  ⏭️  [SKIP] Skipping {result_file.name}")
                 else:
-                    print(f"  [SKIP] No pickle file found, skipping {result_file.name}")
+                    print(f"  ❌ [ERROR] No pickle file found: {pkl_file}")
+                    print(f"  ⏭️  [SKIP] Cannot recover, skipping {result_file.name}")
                     
             except Exception as e:
-                print(f"  [ERROR] Failed to load {result_file.name}: {e}")
-                print(f"  [SKIP] Skipping this file")
+                print(f"  ❌ [ERROR] Failed to load {result_file.name}")
+                print(f"     Error type: {type(e).__name__}")
+                print(f"     Error message: {e}")
+                print(f"  ⏭️  [SKIP] Skipping this file")
         else:
-            print(f"  [WARN] Cannot parse filename: {result_file.name}")
+            print(f"  ⚠️  [WARN] Cannot parse filename: {result_file.name}")
     
-    print(f"Loaded {len(all_results)} experiments\n")
+    print(f"\n{'='*80}")
+    print(f"Summary: Loaded {len(all_results)}/{len(result_files)} experiments")
+    if len(all_results) < len(result_files):
+        print(f"⚠️  {len(result_files) - len(all_results)} file(s) were skipped due to errors")
+    print(f"{'='*80}\n")
     return all_results
 
 
