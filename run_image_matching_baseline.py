@@ -207,22 +207,110 @@ def convert_to_python_types(obj):
         return obj
 
 
+def validate_json_serializable(obj, path=""):
+    """递归验证对象是否可以JSON序列化"""
+    try:
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                validate_json_serializable(value, f"{path}.{key}")
+        elif isinstance(obj, list):
+            for i, item in enumerate(obj):
+                validate_json_serializable(item, f"{path}[{i}]")
+        elif isinstance(obj, tuple):
+            for i, item in enumerate(obj):
+                validate_json_serializable(item, f"{path}[{i}]")
+        else:
+            # 尝试序列化单个值
+            json.dumps(obj)
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"Cannot serialize object at {path}: {type(obj).__name__} - {e}")
+
+
+def test_json_serialization(data):
+    """测试数据是否可以JSON序列化"""
+    try:
+        # 先尝试序列化到字符串
+        json_str = json.dumps(data, indent=2)
+        # 再尝试反序列化验证
+        json.loads(json_str)
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
 def save_results(results, analysis, output_path):
-    """保存结果"""
+    """保存结果，带完整的验证和错误处理"""
+    print(f"\n[INFO] Preparing to save results to: {output_path}")
+    
+    # 1. 构建输出数据
     output = {
         'results': results,
         'analysis': analysis
     }
     
-    # 转换所有NumPy类型为Python原生类型
-    output = convert_to_python_types(output)
+    # 2. 转换所有NumPy类型为Python原生类型
+    print("[INFO] Converting NumPy types to Python native types...")
+    try:
+        output = convert_to_python_types(output)
+    except Exception as e:
+        print(f"[ERROR] Failed to convert types: {e}")
+        raise
     
+    # 3. 验证数据完整性
+    print("[INFO] Validating data integrity...")
+    try:
+        validate_json_serializable(output)
+    except ValueError as e:
+        print(f"[ERROR] Data validation failed: {e}")
+        raise
+    
+    # 4. 测试JSON序列化（不实际写入文件）
+    print("[INFO] Testing JSON serialization...")
+    success, error_msg = test_json_serialization(output)
+    if not success:
+        print(f"[ERROR] JSON serialization test failed: {error_msg}")
+        print("[INFO] Attempting to identify problematic data...")
+        # 尝试找出问题数据
+        try:
+            validate_json_serializable(output)
+        except ValueError as e:
+            print(f"[ERROR] Problematic data location: {e}")
+        raise ValueError(f"Cannot serialize to JSON: {error_msg}")
+    
+    # 5. 创建输出目录
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    with open(output_path, 'w') as f:
-        json.dump(output, f, indent=2)
+    # 6. 实际保存（先写入临时文件，成功后再重命名）
+    temp_path = output_path.with_suffix('.json.tmp')
+    print(f"[INFO] Writing to temporary file: {temp_path}")
     
-    print(f"\n[SAVED] Results saved to: {output_path}")
+    try:
+        with open(temp_path, 'w', encoding='utf-8') as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
+        
+        # 验证文件是否成功写入
+        if not temp_path.exists() or temp_path.stat().st_size == 0:
+            raise ValueError("File was not written or is empty")
+        
+        # 验证文件可以读取
+        with open(temp_path, 'r', encoding='utf-8') as f:
+            loaded = json.load(f)
+        
+        # 验证加载的数据结构
+        assert 'results' in loaded, "Missing 'results' key"
+        assert 'analysis' in loaded, "Missing 'analysis' key"
+        
+        # 重命名为正式文件
+        temp_path.rename(output_path)
+        print(f"[OK] Results saved successfully to: {output_path}")
+        print(f"[INFO] File size: {output_path.stat().st_size / (1024*1024):.2f} MB")
+        
+    except Exception as e:
+        # 如果失败，清理临时文件
+        if temp_path.exists():
+            print(f"[WARN] Keeping temporary file for recovery: {temp_path}")
+        print(f"[ERROR] Failed to save results: {e}")
+        raise
 
 
 def print_analysis(analysis):
@@ -351,18 +439,35 @@ def main():
     analysis = analyze_inliers_correlation(results)
     print_analysis(analysis)
     
-    # 5. 保存结果（先保存临时文件，成功后再重命名）
-    temp_output_path = output_path.with_suffix('.json.tmp')
+    # 5. 保存结果（带完整的验证和错误处理）
     try:
-        save_results(results, analysis, temp_output_path)
-        # 保存成功，重命名为正式文件
-        temp_output_path.rename(output_path)
-        print(f"[OK] Results saved successfully to: {output_path}")
+        save_results(results, analysis, output_path)
     except Exception as e:
-        # 如果保存失败，保留临时文件以便恢复
-        print(f"[ERROR] Failed to save results: {e}")
-        print(f"[INFO] Temporary file saved at: {temp_output_path}")
-        print("[INFO] You can try to recover data from the temp file.")
+        # 如果保存失败，尝试保存基本信息以便恢复
+        print(f"\n[ERROR] Failed to save results: {e}")
+        print("[INFO] Attempting to save minimal recovery data...")
+        
+        # 保存基本信息（不包含完整results，只保存analysis）
+        recovery_path = output_path.with_suffix('.recovery.json')
+        try:
+            recovery_data = {
+                'analysis': convert_to_python_types(analysis),
+                'error': str(e),
+                'num_results': len(results.get('query_ids', [])),
+                'timestamp': str(Path().cwd())
+            }
+            with open(recovery_path, 'w', encoding='utf-8') as f:
+                json.dump(recovery_data, f, indent=2, ensure_ascii=False)
+            print(f"[INFO] Recovery data saved to: {recovery_path}")
+        except Exception as recovery_error:
+            print(f"[WARN] Could not save recovery data: {recovery_error}")
+        
+        # 检查是否有临时文件
+        temp_path = output_path.with_suffix('.json.tmp')
+        if temp_path.exists():
+            print(f"[INFO] Temporary file exists at: {temp_path}")
+            print("[INFO] You can try to manually recover data from the temp file.")
+        
         raise
     
     print(f"\n[DONE] Experiment completed!")
