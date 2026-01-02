@@ -11,6 +11,7 @@ import torch
 import numpy as np
 from pathlib import Path
 import json
+import pickle
 from tqdm import tqdm
 import argparse
 import sys
@@ -113,7 +114,31 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
         'database_paths': []
     }
     
-    for q_idx in tqdm(range(num_queries), desc="Matching queries"):
+    # Checkpoint路径（用于定期保存中间结果）
+    checkpoint_dir = Path("checkpoints/image_matching")
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_path = checkpoint_dir / f"{vpr_log_dir.name}_checkpoint.pkl"
+    
+    # 尝试从checkpoint恢复
+    start_idx = 0
+    if checkpoint_path.exists():
+        try:
+            print(f"[INFO] Found checkpoint: {checkpoint_path}")
+            print("[INFO] Loading checkpoint...")
+            with open(checkpoint_path, 'rb') as f:
+                checkpoint = pickle.load(f)
+            results = checkpoint['results']
+            start_idx = checkpoint['last_query_idx'] + 1
+            print(f"[INFO] Resuming from query {start_idx}/{num_queries}")
+        except Exception as e:
+            print(f"[WARN] Failed to load checkpoint: {e}")
+            print("[INFO] Starting from scratch...")
+            start_idx = 0
+    
+    # 定期保存checkpoint的间隔（每处理10%的queries保存一次）
+    checkpoint_interval = max(1, num_queries // 10)
+    
+    for q_idx in tqdm(range(start_idx, num_queries), desc="Matching queries", initial=start_idx, total=num_queries):
         gt_idx = ground_truth[q_idx].item()
         query_path = Path(queries_paths[q_idx])
         
@@ -140,6 +165,29 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
             results['num_inliers'].append(int(num_inliers))  # 确保转换为Python int
             results['query_paths'].append(str(query_path))
             results['database_paths'].append(str(database_path))
+        
+        # 定期保存checkpoint
+        if (q_idx + 1) % checkpoint_interval == 0 or (q_idx + 1) == num_queries:
+            try:
+                checkpoint_data = {
+                    'results': results,
+                    'last_query_idx': q_idx,
+                    'num_queries': num_queries,
+                    'K': K
+                }
+                with open(checkpoint_path, 'wb') as f:
+                    pickle.dump(checkpoint_data, f)
+                print(f"\n[CHECKPOINT] Saved at query {q_idx + 1}/{num_queries}")
+            except Exception as e:
+                print(f"\n[WARN] Failed to save checkpoint: {e}")
+    
+    # 计算完成后，删除checkpoint（因为已经完成）
+    if checkpoint_path.exists():
+        try:
+            checkpoint_path.unlink()
+            print(f"[INFO] Removed checkpoint file (computation completed)")
+        except:
+            pass
     
     return results
 
@@ -439,10 +487,47 @@ def main():
     analysis = analyze_inliers_correlation(results)
     print_analysis(analysis)
     
-    # 5. 保存结果（带完整的验证和错误处理）
+    # 5. 先保存为pickle格式（更可靠，即使JSON失败也能恢复）
+    pickle_path = output_path.with_suffix('.pkl')
+    print(f"\n[INFO] Saving results to pickle format first (more reliable): {pickle_path}")
+    try:
+        pickle_data = {
+            'results': results,
+            'analysis': analysis,
+            'metadata': {
+                'matcher': args.matcher,
+                'vpr_method': args.vpr_method,
+                'dataset': args.dataset,
+                'distance': args.distance,
+                'top_k': args.top_k
+            }
+        }
+        pickle_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(pickle_data, f)
+        print(f"[OK] Results saved to pickle: {pickle_path}")
+        print(f"[INFO] File size: {pickle_path.stat().st_size / (1024*1024):.2f} MB")
+    except Exception as e:
+        print(f"[ERROR] Failed to save pickle: {e}")
+        raise
+    
+    # 6. 然后尝试保存为JSON格式（用于分析脚本）
+    print(f"\n[INFO] Attempting to save as JSON format: {output_path}")
     try:
         save_results(results, analysis, output_path)
+        print(f"[OK] JSON saved successfully!")
     except Exception as e:
+        # JSON保存失败，但pickle已保存，所以结果不会丢失
+        print(f"\n[WARN] Failed to save JSON format: {e}")
+        print(f"[INFO] BUT: Results are safely saved in pickle format: {pickle_path}")
+        print(f"[INFO] You can load the pickle file to recover all data:")
+        print(f"      import pickle")
+        print(f"      with open('{pickle_path}', 'rb') as f:")
+        print(f"          data = pickle.load(f)")
+        print(f"      results = data['results']")
+        print(f"      analysis = data['analysis']")
+        # 不抛出异常，因为pickle已成功保存
+        return
         # 如果保存失败，尝试保存基本信息以便恢复
         print(f"\n[ERROR] Failed to save results: {e}")
         print("[INFO] Attempting to save minimal recovery data...")
