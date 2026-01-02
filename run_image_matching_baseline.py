@@ -163,8 +163,8 @@ def analyze_inliers_correlation(results):
     
     analysis = {
         'num_matches': len(inliers),
-        'num_correct': np.sum(is_correct),
-        'num_incorrect': np.sum(~is_correct),
+        'num_correct': int(np.sum(is_correct)),
+        'num_incorrect': int(np.sum(~is_correct)),
         
         # 正确预测的统计
         'correct_mean_inliers': float(np.mean(correct_inliers)) if len(correct_inliers) > 0 else 0,
@@ -185,12 +185,33 @@ def analyze_inliers_correlation(results):
     return analysis
 
 
+def convert_to_python_types(obj):
+    """递归地将NumPy类型转换为Python原生类型，以便JSON序列化"""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_to_python_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_to_python_types(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(convert_to_python_types(item) for item in obj)
+    else:
+        return obj
+
+
 def save_results(results, analysis, output_path):
     """保存结果"""
     output = {
         'results': results,
         'analysis': analysis
     }
+    
+    # 转换所有NumPy类型为Python原生类型
+    output = convert_to_python_types(output)
     
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
