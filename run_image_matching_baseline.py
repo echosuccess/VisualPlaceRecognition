@@ -326,6 +326,13 @@ def main():
     print(f"Database folder: {database_folder}")
     print(f"Queries folder: {queries_folder}")
     
+    # 检查是否已有结果文件
+    output_path = Path(args.output_dir) / f"{args.matcher}_{vpr_exp_name}.json"
+    if output_path.exists():
+        print(f"[INFO] Result file already exists: {output_path}")
+        print("[INFO] Skipping computation. Delete the file to re-run.")
+        return
+    
     # 运行Image Matching
     results = process_vpr_experiment(
         vpr_log_dir=vpr_log_dir,
@@ -340,9 +347,19 @@ def main():
     analysis = analyze_inliers_correlation(results)
     print_analysis(analysis)
     
-    # 5. 保存结果
-    output_path = Path(args.output_dir) / f"{args.matcher}_{vpr_exp_name}.json"
-    save_results(results, analysis, output_path)
+    # 5. 保存结果（先保存临时文件，成功后再重命名）
+    temp_output_path = output_path.with_suffix('.json.tmp')
+    try:
+        save_results(results, analysis, temp_output_path)
+        # 保存成功，重命名为正式文件
+        temp_output_path.rename(output_path)
+        print(f"[OK] Results saved successfully to: {output_path}")
+    except Exception as e:
+        # 如果保存失败，保留临时文件以便恢复
+        print(f"[ERROR] Failed to save results: {e}")
+        print(f"[INFO] Temporary file saved at: {temp_output_path}")
+        print("[INFO] You can try to recover data from the temp file.")
+        raise
     
     print(f"\n[DONE] Experiment completed!")
     print(f"Results saved to: {output_path}\n")
