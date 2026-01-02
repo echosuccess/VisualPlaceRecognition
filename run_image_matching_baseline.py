@@ -168,11 +168,58 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
     queries_paths = sorted(set(queries_paths))
     
     num_queries = len(queries_paths)
+    num_database = len(database_paths)
     K = min(top_k, predictions.shape[1])
     
-    print(f"Loaded {num_queries} queries, {len(database_paths)} database images")
+    print(f"Loaded {num_queries} queries, {num_database} database images")
     print(f"Database folder: {database_folder_path} (exists: {database_folder_path.exists()})")
     print(f"Queries folder: {queries_folder_path} (exists: {queries_folder_path.exists()})")
+    
+    # 检查 VPR 预测中的索引范围
+    print(f"\n[DEBUG] VPR predictions shape: {predictions.shape}")
+    print(f"[DEBUG] Ground truth shape: {ground_truth.shape}")
+    if len(predictions) > 0:
+        max_pred_idx = int(predictions.max().item())
+        min_pred_idx = int(predictions.min().item())
+        print(f"[DEBUG] Prediction indices range: {min_pred_idx} to {max_pred_idx}")
+        print(f"[DEBUG] Database paths available: 0 to {num_database - 1}")
+        
+        if max_pred_idx >= num_database:
+            print(f"\n[WARN] ⚠️  VPR predictions contain indices up to {max_pred_idx}, but only {num_database} database images loaded!")
+            print(f"[WARN] This indicates a mismatch between VPR experiment and current database files.")
+            
+            # 统计有多少预测索引超出范围
+            invalid_count = 0
+            total_checked = 0
+            sample_invalid = []
+            
+            # 检查所有预测（但只采样一部分来统计）
+            check_sample = min(100, len(predictions))  # 检查前100个查询或全部
+            for q_idx in range(check_sample):
+                for rank in range(predictions.shape[1]):
+                    total_checked += 1
+                    pred_idx = int(predictions[q_idx, rank].item())
+                    if pred_idx >= num_database:
+                        invalid_count += 1
+                        if len(sample_invalid) < 5:
+                            sample_invalid.append((q_idx, rank, pred_idx))
+            
+            if invalid_count > 0:
+                invalid_ratio = invalid_count / total_checked
+                print(f"[WARN] Found {invalid_count}/{total_checked} ({invalid_ratio*100:.1f}%) invalid indices in sample")
+                print(f"[WARN] Example invalid indices: {sample_invalid[:3]}")
+                
+                # 如果无效索引比例太高，给出严重警告
+                if invalid_ratio > 0.1:  # 超过10%的预测无效
+                    print(f"\n[ERROR] ❌ Too many invalid prediction indices ({invalid_ratio*100:.1f}%)!")
+                    print(f"[ERROR] This suggests the database files don't match the VPR experiment.")
+                    print(f"[ERROR] Options:")
+                    print(f"  1. Re-run VPR experiment with the current database files")
+                    print(f"  2. Check if database folder path is correct")
+                    print(f"  3. Continue anyway (will skip invalid predictions, but results may be incomplete)")
+                    print(f"\n[INFO] Continuing with warnings - invalid predictions will be skipped...")
+                else:
+                    print(f"[WARN] Some predictions will be skipped, but most are valid.")
     
     if num_queries == 0:
         # 尝试递归搜索
@@ -226,6 +273,9 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
         'database_paths': []
     }
     
+    # 统计跳过的预测数量
+    skipped_predictions = 0
+    
     # Checkpoint路径（用于定期保存中间结果）
     checkpoint_dir = Path("checkpoints/image_matching")
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -256,7 +306,22 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
         
         # 对top-K预测运行匹配
         for rank in range(K):
-            pred_idx = predictions[q_idx, rank].item()
+            pred_idx = int(predictions[q_idx, rank].item())
+            
+            # 检查索引是否有效
+            if pred_idx >= len(database_paths):
+                skipped_predictions += 1
+                # 只在每100个跳过时打印一次，避免输出过多
+                if skipped_predictions <= 5 or skipped_predictions % 100 == 0:
+                    print(f"\n[WARN] Query {q_idx}, rank {rank}: pred_idx {pred_idx} >= database size {len(database_paths)}, skipping")
+                continue
+            
+            if pred_idx < 0:
+                skipped_predictions += 1
+                if skipped_predictions <= 5:
+                    print(f"\n[WARN] Query {q_idx}, rank {rank}: pred_idx {pred_idx} is negative, skipping")
+                continue
+            
             database_path = Path(database_paths[pred_idx])
             
             # 判断预测是否正确
@@ -300,6 +365,14 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
             print(f"[INFO] Removed checkpoint file (computation completed)")
         except:
             pass
+    
+    # 报告跳过的预测数量
+    if skipped_predictions > 0:
+        total_predictions = num_queries * K
+        skip_ratio = skipped_predictions / total_predictions
+        print(f"\n[WARN] ⚠️  Skipped {skipped_predictions}/{total_predictions} ({skip_ratio*100:.1f}%) predictions due to invalid indices")
+        print(f"[WARN] This may affect the completeness of results.")
+        print(f"[WARN] Consider re-running VPR experiment if database files don't match.")
     
     return results
 
