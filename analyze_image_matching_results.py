@@ -8,6 +8,7 @@
 """
 
 import json
+import pickle
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -47,11 +48,59 @@ def load_all_results(results_dir="results/image_matching"):
                 distance = parts[2]
                 dataset = '_'.join(parts[3:])
             
-            with open(result_file, 'r') as f:
-                data = json.load(f)
-            
-            key = (matcher, vpr_method, dataset)
-            all_results[key] = data
+            # 尝试加载JSON文件
+            try:
+                with open(result_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                # 验证数据结构
+                if 'results' not in data or 'analysis' not in data:
+                    raise ValueError("Missing required keys: 'results' or 'analysis'")
+                
+                key = (matcher, vpr_method, dataset)
+                all_results[key] = data
+                print(f"  [OK] Loaded: {result_file.name}")
+                
+            except json.JSONDecodeError as e:
+                print(f"  [ERROR] JSON decode error in {result_file.name}: {e}")
+                print(f"  [INFO] Attempting to recover from pickle file...")
+                
+                # 尝试从pickle文件恢复
+                pkl_file = result_file.with_suffix('.pkl')
+                if pkl_file.exists():
+                    try:
+                        with open(pkl_file, 'rb') as f:
+                            pkl_data = pickle.load(f)
+                        
+                        # 转换为JSON格式
+                        data = {
+                            'results': pkl_data['results'],
+                            'analysis': pkl_data['analysis']
+                        }
+                        
+                        # 尝试重新保存为JSON
+                        try:
+                            with open(result_file, 'w', encoding='utf-8') as f:
+                                json.dump(data, f, indent=2, ensure_ascii=False)
+                            print(f"  [OK] Recovered and saved: {result_file.name}")
+                            
+                            key = (matcher, vpr_method, dataset)
+                            all_results[key] = data
+                        except Exception as save_error:
+                            print(f"  [WARN] Could not save recovered JSON: {save_error}")
+                            print(f"  [INFO] Using pickle data directly...")
+                            # 使用pickle数据，但需要转换格式
+                            key = (matcher, vpr_method, dataset)
+                            all_results[key] = data
+                    except Exception as pkl_error:
+                        print(f"  [ERROR] Failed to load pickle: {pkl_error}")
+                        print(f"  [SKIP] Skipping {result_file.name}")
+                else:
+                    print(f"  [SKIP] No pickle file found, skipping {result_file.name}")
+                    
+            except Exception as e:
+                print(f"  [ERROR] Failed to load {result_file.name}: {e}")
+                print(f"  [SKIP] Skipping this file")
         else:
             print(f"  [WARN] Cannot parse filename: {result_file.name}")
     
