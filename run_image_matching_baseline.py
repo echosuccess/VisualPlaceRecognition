@@ -95,13 +95,125 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
     ground_truth = vpr_data['ground_truth']  # (num_queries,)
     
     # 2. 从文件系统获取图像路径
-    database_paths = sorted(Path(database_folder).glob("*.jpg"))
-    queries_paths = sorted(Path(queries_folder).glob("*.jpg"))
+    database_folder_path = Path(database_folder)
+    queries_folder_path = Path(queries_folder)
+    
+    # 检查文件夹是否存在
+    if not database_folder_path.exists():
+        raise FileNotFoundError(f"Database folder not found: {database_folder_path}")
+    if not queries_folder_path.exists():
+        raise FileNotFoundError(f"Queries folder not found: {queries_folder_path}")
+    
+    # 尝试多种图像扩展名
+    image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG']
+    database_paths = []
+    queries_paths = []
+    
+    print(f"[DEBUG] Searching for images in:")
+    print(f"  Database: {database_folder_path.absolute()}")
+    print(f"  Queries: {queries_folder_path.absolute()}")
+    print(f"  Database exists: {database_folder_path.exists()}")
+    print(f"  Queries exists: {queries_folder_path.exists()}")
+    
+    # 首先检查目录中实际有什么文件
+    if queries_folder_path.exists():
+        all_items = list(queries_folder_path.iterdir())
+        files_only = [f for f in all_items if f.is_file()]
+        print(f"[DEBUG] Queries directory contains {len(files_only)} files (total items: {len(all_items)})")
+        if files_only:
+            # 检查前几个文件的扩展名
+            sample_files = files_only[:3]
+            print(f"[DEBUG] Sample files in queries:")
+            for f in sample_files:
+                print(f"    {f.name} (suffix: '{f.suffix}')")
+    
+    # 尝试直接 glob 搜索
+    for ext in image_extensions:
+        db_files = list(database_folder_path.glob(ext))
+        q_files = list(queries_folder_path.glob(ext))
+        if db_files:
+            print(f"[DEBUG] Found {len(db_files)} files with extension {ext} in database")
+        if q_files:
+            print(f"[DEBUG] Found {len(q_files)} files with extension {ext} in queries")
+        database_paths.extend(sorted(db_files))
+        queries_paths.extend(sorted(q_files))
+    
+    # 如果直接搜索没找到，尝试列出所有文件然后过滤
+    if len(queries_paths) == 0 and queries_folder_path.exists():
+        print(f"[DEBUG] Direct glob search found 0 queries, trying alternative method...")
+        all_files = list(queries_folder_path.iterdir())
+        # 过滤出文件（不是目录）
+        files = [f for f in all_files if f.is_file()]
+        # 检查扩展名（包括大小写变体）
+        valid_extensions = ['.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG']
+        image_files = [f for f in files if f.suffix in valid_extensions]
+        if image_files:
+            queries_paths = sorted(set(image_files))
+            print(f"[DEBUG] Found {len(queries_paths)} query files using alternative method")
+            if queries_paths:
+                print(f"[DEBUG] First query file: {queries_paths[0]}")
+    
+    if len(database_paths) == 0 and database_folder_path.exists():
+        print(f"[DEBUG] Direct glob search found 0 database images, trying alternative method...")
+        all_files = list(database_folder_path.iterdir())
+        files = [f for f in all_files if f.is_file()]
+        valid_extensions = ['.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG']
+        image_files = [f for f in files if f.suffix in valid_extensions]
+        if image_files:
+            database_paths = sorted(set(image_files))
+            print(f"[DEBUG] Found {len(database_paths)} database files using alternative method")
+    
+    # 去重并排序
+    database_paths = sorted(set(database_paths))
+    queries_paths = sorted(set(queries_paths))
     
     num_queries = len(queries_paths)
     K = min(top_k, predictions.shape[1])
     
     print(f"Loaded {num_queries} queries, {len(database_paths)} database images")
+    print(f"Database folder: {database_folder_path} (exists: {database_folder_path.exists()})")
+    print(f"Queries folder: {queries_folder_path} (exists: {queries_folder_path.exists()})")
+    
+    if num_queries == 0:
+        # 尝试递归搜索
+        print(f"[DEBUG] Trying recursive search...")
+        all_files = list(queries_folder_path.rglob("*"))
+        image_files = [f for f in all_files if f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
+        print(f"[DEBUG] Found {len(image_files)} image files recursively")
+        if image_files:
+            print(f"[DEBUG] First few files: {image_files[:5]}")
+            # 如果递归搜索找到了文件，使用这些文件
+            queries_paths = sorted(set(image_files))
+            num_queries = len(queries_paths)
+            print(f"[INFO] Using {num_queries} query images found via recursive search")
+        
+        # 同样检查database
+        if len(database_paths) == 0:
+            print(f"[DEBUG] Trying recursive search for database images...")
+            all_db_files = list(database_folder_path.rglob("*"))
+            db_image_files = [f for f in all_db_files if f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
+            print(f"[DEBUG] Found {len(db_image_files)} database image files recursively")
+            if db_image_files:
+                database_paths = sorted(set(db_image_files))
+                print(f"[INFO] Using {len(database_paths)} database images found via recursive search")
+        
+        if num_queries == 0:
+            raise ValueError(
+                f"No query images found in {queries_folder_path}!\n"
+                f"Absolute path: {queries_folder_path.absolute()}\n"
+                f"Please check:\n"
+                f"  1. The folder path is correct\n"
+                f"  2. The folder contains image files (.jpg, .jpeg, .png)\n"
+                f"  3. The dataset name matches the actual folder structure\n"
+                f"  4. Recursive search found {len(image_files)} image files"
+            )
+    
+    if len(database_paths) == 0:
+        raise ValueError(
+            f"No database images found in {database_folder_path}!\n"
+            f"Please check the folder path and contents."
+        )
+    
     print(f"Will match top-{K} predictions per query")
     
     # 2. 对每个query的top-K预测运行匹配
@@ -202,12 +314,31 @@ def analyze_inliers_correlation(results):
     Returns:
         analysis: 分析结果
     """
-    inliers = np.array(results['num_inliers'])
-    is_correct = np.array(results['is_correct'])
+    # 检查结果是否为空
+    if not results or len(results.get('num_inliers', [])) == 0:
+        print("[WARN] No results to analyze!")
+        return {
+            'num_matches': 0,
+            'num_correct': 0,
+            'num_incorrect': 0,
+            'correct_mean_inliers': 0,
+            'correct_median_inliers': 0,
+            'correct_std_inliers': 0,
+            'incorrect_mean_inliers': 0,
+            'incorrect_median_inliers': 0,
+            'incorrect_std_inliers': 0,
+        }
+    
+    inliers = np.array(results['num_inliers'], dtype=np.float64)
+    is_correct = np.array(results['is_correct'], dtype=bool)
+    
+    # 确保数组长度一致
+    if len(inliers) != len(is_correct):
+        raise ValueError(f"Array length mismatch: inliers={len(inliers)}, is_correct={len(is_correct)}")
     
     # 分为正确预测和错误预测
-    correct_inliers = inliers[is_correct]
-    incorrect_inliers = inliers[~is_correct]
+    correct_inliers = inliers[is_correct] if len(inliers) > 0 else np.array([])
+    incorrect_inliers = inliers[~is_correct] if len(inliers) > 0 else np.array([])
     
     analysis = {
         'num_matches': len(inliers),
@@ -451,20 +582,38 @@ def main():
     
     # 3. 构建数据路径（根据VPR方法和数据集）
     # 根据dataset参数推断database和queries路径
-    dataset_base = f"data/{args.dataset.replace('_test', '')}"
+    # 数据集命名规则：
+    # - sf_xs_test -> data/sf_xs/test/database, data/sf_xs/test/queries
+    # - tokyo_xs_test -> data/tokyo_xs/test/database, data/tokyo_xs/test/queries
+    # - svox_sun_test -> data/svox/images/test/gallery, data/svox/images/test/queries
+    # - svox_night_test -> data/svox/images/test/gallery, data/svox/images/test/queries_night
+    
     if 'svox' in args.dataset:
+        # SVOX数据集特殊结构
         if 'night' in args.dataset:
-            database_folder = f"{dataset_base}/images/test/gallery"
-            queries_folder = f"{dataset_base}/images/test/queries_night"
+            database_folder = "data/svox/images/test/gallery"
+            queries_folder = "data/svox/images/test/queries_night"
         else:  # sun
-            database_folder = f"{dataset_base}/images/test/gallery"
-            queries_folder = f"{dataset_base}/images/test/queries"
+            database_folder = "data/svox/images/test/gallery"
+            queries_folder = "data/svox/images/test/queries"
     else:
-        database_folder = f"{dataset_base}/test/database"
-        queries_folder = f"{dataset_base}/test/queries"
+        # SF-XS 和 Tokyo-XS 数据集结构
+        dataset_name = args.dataset.replace('_test', '')  # 移除 _test 后缀
+        database_folder = f"data/{dataset_name}/test/database"
+        queries_folder = f"data/{dataset_name}/test/queries"
     
     print(f"Database folder: {database_folder}")
     print(f"Queries folder: {queries_folder}")
+    
+    # 验证路径是否存在（提前检查，避免浪费时间）
+    if not Path(database_folder).exists():
+        print(f"[ERROR] Database folder does not exist: {database_folder}")
+        print(f"[INFO] Please check if the dataset is downloaded and the path is correct")
+        return
+    if not Path(queries_folder).exists():
+        print(f"[ERROR] Queries folder does not exist: {queries_folder}")
+        print(f"[INFO] Please check if the dataset is downloaded and the path is correct")
+        return
     
     # 检查是否已有结果文件
     output_path = Path(args.output_dir) / f"{args.matcher}_{vpr_exp_name}.json"
