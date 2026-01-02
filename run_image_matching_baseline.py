@@ -188,13 +188,12 @@ def analyze_inliers_correlation(results):
 def convert_to_python_types(obj):
     """递归地将NumPy类型转换为Python原生类型，以便JSON序列化"""
     # 处理NumPy标量类型
-    if isinstance(obj, (np.integer, np.int_, np.intc, np.intp, np.int8,
-                       np.int16, np.int32, np.int64, np.uint8, np.uint16,
-                       np.uint32, np.uint64)):
+    # NumPy 2.0兼容：使用类型检查而不是可能被移除的别名
+    if isinstance(obj, np.integer):
         return int(obj)
-    elif isinstance(obj, (np.floating, np.float_, np.float16, np.float32, np.float64)):
+    elif isinstance(obj, np.floating):
         return float(obj)
-    elif isinstance(obj, np.bool_):
+    elif isinstance(obj, (np.bool_, bool)):
         return bool(obj)
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
