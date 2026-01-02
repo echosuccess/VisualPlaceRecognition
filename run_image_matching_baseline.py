@@ -133,11 +133,11 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
                 device=device
             )
             
-            # 记录结果
-            results['query_ids'].append(q_idx)
-            results['pred_ranks'].append(rank)
-            results['is_correct'].append(is_correct)
-            results['num_inliers'].append(num_inliers)
+            # 记录结果（确保所有类型都是Python原生类型）
+            results['query_ids'].append(int(q_idx))
+            results['pred_ranks'].append(int(rank))
+            results['is_correct'].append(bool(is_correct))
+            results['num_inliers'].append(int(num_inliers))  # 确保转换为Python int
             results['query_paths'].append(str(query_path))
             results['database_paths'].append(str(database_path))
     
@@ -187,10 +187,15 @@ def analyze_inliers_correlation(results):
 
 def convert_to_python_types(obj):
     """递归地将NumPy类型转换为Python原生类型，以便JSON序列化"""
-    if isinstance(obj, np.integer):
+    # 处理NumPy标量类型
+    if isinstance(obj, (np.integer, np.int_, np.intc, np.intp, np.int8,
+                       np.int16, np.int32, np.int64, np.uint8, np.uint16,
+                       np.uint32, np.uint64)):
         return int(obj)
-    elif isinstance(obj, np.floating):
+    elif isinstance(obj, (np.floating, np.float_, np.float16, np.float32, np.float64)):
         return float(obj)
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
     elif isinstance(obj, dict):
