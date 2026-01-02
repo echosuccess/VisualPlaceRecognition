@@ -110,8 +110,60 @@ def load_all_results(results_dir="results/image_matching"):
                         print(f"  ❌ [ERROR] Failed to load pickle: {pkl_error}")
                         print(f"  ⏭️  [SKIP] Skipping {result_file.name}")
                 else:
-                    print(f"  ❌ [ERROR] No pickle file found: {pkl_file}")
-                    print(f"  ⏭️  [SKIP] Cannot recover, skipping {result_file.name}")
+                    # 尝试查找pickle文件（可能文件名不完全匹配）
+                    print(f"  🔍 [INFO] Checking for pickle file: {pkl_file.name}")
+                    print(f"     Expected path: {pkl_file}")
+                    
+                    # 检查同一目录下是否有类似的pickle文件
+                    pkl_dir = pkl_file.parent
+                    all_pkl_files = list(pkl_dir.glob("*.pkl"))
+                    matching_pkl = None
+                    
+                    # 尝试匹配文件名（去掉扩展名后比较）
+                    json_stem = result_file.stem
+                    for pkl in all_pkl_files:
+                        if pkl.stem == json_stem:
+                            matching_pkl = pkl
+                            break
+                    
+                    if matching_pkl and matching_pkl.exists():
+                        print(f"  ✅ [FOUND] Found matching pickle: {matching_pkl.name}")
+                        pkl_file = matching_pkl
+                        # 重新尝试加载
+                        try:
+                            with open(pkl_file, 'rb') as f:
+                                pkl_data = pickle.load(f)
+                            
+                            data = {
+                                'results': pkl_data['results'],
+                                'analysis': pkl_data['analysis']
+                            }
+                            
+                            # 备份并保存
+                            backup_file = result_file.with_suffix('.json.bak')
+                            if result_file.exists():
+                                import shutil
+                                shutil.copy2(result_file, backup_file)
+                                print(f"     Backed up corrupted file to: {backup_file.name}")
+                            
+                            with open(result_file, 'w', encoding='utf-8') as f:
+                                json.dump(data, f, indent=2, ensure_ascii=False)
+                            print(f"  ✅ [RECOVERED] Successfully recovered and saved!")
+                            
+                            key = (matcher, vpr_method, dataset)
+                            all_results[key] = data
+                        except Exception as recover_error:
+                            print(f"  ❌ [ERROR] Failed to recover from {matching_pkl.name}: {recover_error}")
+                            print(f"  ⏭️  [SKIP] Skipping {result_file.name}")
+                    else:
+                        print(f"  ❌ [ERROR] No pickle file found")
+                        if all_pkl_files:
+                            print(f"     Available pickle files in directory:")
+                            for pkl in all_pkl_files[:5]:  # 只显示前5个
+                                print(f"       - {pkl.name}")
+                            if len(all_pkl_files) > 5:
+                                print(f"       ... and {len(all_pkl_files) - 5} more")
+                        print(f"  ⏭️  [SKIP] Cannot recover, skipping {result_file.name}")
                     
             except Exception as e:
                 print(f"  ❌ [ERROR] Failed to load {result_file.name}")
