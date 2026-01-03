@@ -20,49 +20,78 @@ except ImportError:
     print("[WARN] PyTorch not available, will only check file system")
 
 def count_images_in_folder(folder_path, recursive=False):
-    """统计文件夹中的图像数量"""
+    """
+    统计文件夹中的图像数量
+    使用与 VPR 代码相同的方式：glob with recursive=True
+    """
+    from glob import glob
+    
     folder = Path(folder_path)
     if not folder.exists():
         return 0, []
     
-    image_extensions = ['.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG']
-    image_files = []
-    
+    # VPR 代码使用: glob(f"{dataset_folder}/**/*", recursive=True)
+    # 然后过滤: os.path.isfile(p) and os.path.splitext(p)[1].lower() in [".jpg", ".jpeg", ".png"]
     if recursive:
-        for ext in image_extensions:
-            image_files.extend(folder.rglob(f'*{ext}'))
+        # 使用 glob 递归搜索（与 VPR 代码一致）
+        all_files = glob(f"{folder}/**/*", recursive=True)
     else:
-        for ext in image_extensions:
-            image_files.extend(folder.glob(f'*{ext}'))
+        all_files = glob(f"{folder}/*")
     
-    # 去重并排序
+    # 过滤图像文件（与 VPR 代码一致）
+    image_extensions = [".jpg", ".jpeg", ".png"]
+    image_files = []
+    for file_path in all_files:
+        file_path_obj = Path(file_path)
+        if file_path_obj.is_file() and file_path_obj.suffix.lower() in image_extensions:
+            image_files.append(file_path_obj)
+    
+    # 去重并排序（与 VPR 代码一致）
     image_files = sorted(set(image_files))
     return len(image_files), image_files
 
 def load_vpr_log(log_dir):
-    """加载 VPR 日志"""
+    """加载 VPR 日志，同时尝试读取 info.log 获取加载的图像数量"""
     if not TORCH_AVAILABLE:
-        return None, None
+        return None, None, None
     
     log_dir = Path(log_dir)
     
     # 找到最新的时间戳目录
     timestamp_dirs = sorted([d for d in log_dir.iterdir() if d.is_dir()])
     if not timestamp_dirs:
-        return None, None
+        return None, None, None
     
     latest_dir = timestamp_dirs[-1]
     z_data_path = latest_dir / "z_data.torch"
+    info_log_path = latest_dir / "info.log"
+    
+    # 尝试读取 info.log 获取 VPR 实际加载的图像数量
+    vpr_loaded_info = None
+    if info_log_path.exists():
+        try:
+            with open(info_log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                log_content = f.read()
+                # 查找 TestDataset 信息，格式类似: < #queries: 1000; #database: 27191 >
+                import re
+                match = re.search(r'< #queries: (\d+); #database: (\d+) >', log_content)
+                if match:
+                    vpr_loaded_info = {
+                        'num_queries': int(match.group(1)),
+                        'num_database': int(match.group(2))
+                    }
+        except Exception as e:
+            pass  # 忽略日志读取错误
     
     if not z_data_path.exists():
-        return None, None
+        return None, latest_dir, vpr_loaded_info
     
     try:
         data = torch.load(z_data_path, map_location='cpu', weights_only=False)
-        return data, latest_dir
+        return data, latest_dir, vpr_loaded_info
     except Exception as e:
         print(f"  [ERROR] 无法加载 z_data.torch: {e}")
-        return None, None
+        return None, latest_dir, vpr_loaded_info
 
 def verify_experiment(exp_name, database_folder, queries_folder, recursive=False):
     """验证单个实验的数据完整性"""
@@ -84,10 +113,22 @@ def verify_experiment(exp_name, database_folder, queries_folder, recursive=False
         print(f"\n[ERROR] VPR 日志不存在: {log_base}")
         return False
     
-    vpr_data, log_dir = load_vpr_log(log_base)
+    vpr_data, log_dir, vpr_loaded_info = load_vpr_log(log_base)
     if vpr_data is None:
         print(f"\n[ERROR] 无法加载 VPR 数据")
         return False
+    
+    # 显示 VPR 日志中记录的加载信息（如果可用）
+    if vpr_loaded_info:
+        print(f"\n[1.5] VPR 日志中记录的加载信息:")
+        print(f"  Database 图像（VPR 记录）: {vpr_loaded_info['num_database']}")
+        print(f"  Queries 图像（VPR 记录）: {vpr_loaded_info['num_queries']}")
+        
+        # 检查与文件系统的一致性
+        if vpr_loaded_info['num_database'] != num_db_images:
+            print(f"  [WARN] Database 数量不一致: 文件系统 {num_db_images} vs VPR 记录 {vpr_loaded_info['num_database']}")
+        if vpr_loaded_info['num_queries'] != num_query_images:
+            print(f"  [WARN] Queries 数量不一致: 文件系统 {num_query_images} vs VPR 记录 {vpr_loaded_info['num_queries']}")
     
     # 3. 检查 VPR 预测中的索引范围
     predictions = vpr_data.get('predictions', None)
