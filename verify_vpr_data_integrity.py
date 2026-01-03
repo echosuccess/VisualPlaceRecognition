@@ -142,7 +142,17 @@ def verify_experiment(exp_name, database_folder, queries_folder, recursive=False
         print(f"    超出: {max_pred_idx - num_db_images + 1} 个索引")
     
     # 检查 ground truth
-    if positives_per_query:
+    # 安全地检查 positives_per_query 是否非空
+    has_positives = False
+    if positives_per_query is not None:
+        if isinstance(positives_per_query, (list, tuple)):
+            has_positives = len(positives_per_query) > 0
+        elif isinstance(positives_per_query, np.ndarray):
+            has_positives = positives_per_query.size > 0
+        else:
+            has_positives = True  # 其他类型，假设非空
+    
+    if has_positives:
         try:
             # 处理不同的 positives_per_query 格式
             gt_indices = []
@@ -151,7 +161,11 @@ def verify_experiment(exp_name, database_folder, queries_folder, recursive=False
                     continue
                 if isinstance(pos, (list, tuple, np.ndarray)):
                     if len(pos) > 0:
-                        gt_indices.extend(pos)
+                        # 如果是 numpy array，转换为 list
+                        if isinstance(pos, np.ndarray):
+                            gt_indices.extend(pos.tolist())
+                        else:
+                            gt_indices.extend(pos)
                 elif hasattr(pos, '__iter__'):
                     gt_indices.extend(list(pos))
             
