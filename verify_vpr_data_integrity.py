@@ -10,6 +10,7 @@
 
 from pathlib import Path
 from collections import defaultdict
+import numpy as np
 
 try:
     import torch
@@ -96,9 +97,23 @@ def verify_experiment(exp_name, database_folder, queries_folder, recursive=False
         print(f"\n[ERROR] VPR 数据中没有 predictions")
         return False
     
-    num_queries_vpr = predictions.shape[0]
-    max_pred_idx = int(predictions.max().item()) if predictions.numel() > 0 else -1
-    min_pred_idx = int(predictions.min().item()) if predictions.numel() > 0 else -1
+    # 确保 predictions 是 tensor 或 numpy array
+    if TORCH_AVAILABLE and isinstance(predictions, torch.Tensor):
+        predictions_np = predictions.cpu().numpy()
+    elif hasattr(predictions, 'numpy'):
+        predictions_np = predictions.numpy()
+    elif isinstance(predictions, (list, tuple)):
+        predictions_np = np.array(predictions)
+    else:
+        predictions_np = np.asarray(predictions)
+    
+    if predictions_np.size == 0:
+        print(f"\n[ERROR] VPR predictions 为空")
+        return False
+    
+    num_queries_vpr = predictions_np.shape[0]
+    max_pred_idx = int(predictions_np.max()) if predictions_np.size > 0 else -1
+    min_pred_idx = int(predictions_np.min()) if predictions_np.size > 0 else -1
     
     print(f"\n[2] VPR 预测信息:")
     print(f"  Queries 数量: {num_queries_vpr}")
@@ -128,11 +143,26 @@ def verify_experiment(exp_name, database_folder, queries_folder, recursive=False
     
     # 检查 ground truth
     if positives_per_query:
-        max_gt_idx = max([max(pos) if pos else -1 for pos in positives_per_query])
-        if max_gt_idx >= num_db_images:
-            issues.append(f"Ground truth 索引超出范围: 最大索引 {max_gt_idx} >= 实际数量 {num_db_images}")
-            print(f"  [WARN] Ground truth 索引超出范围!")
-            print(f"    最大 GT 索引: {max_gt_idx}")
+        try:
+            # 处理不同的 positives_per_query 格式
+            gt_indices = []
+            for pos in positives_per_query:
+                if pos is None:
+                    continue
+                if isinstance(pos, (list, tuple, np.ndarray)):
+                    if len(pos) > 0:
+                        gt_indices.extend(pos)
+                elif hasattr(pos, '__iter__'):
+                    gt_indices.extend(list(pos))
+            
+            if gt_indices:
+                max_gt_idx = max(gt_indices)
+                if max_gt_idx >= num_db_images:
+                    issues.append(f"Ground truth 索引超出范围: 最大索引 {max_gt_idx} >= 实际数量 {num_db_images}")
+                    print(f"  [WARN] Ground truth 索引超出范围!")
+                    print(f"    最大 GT 索引: {max_gt_idx}")
+        except (ValueError, TypeError) as e:
+            print(f"  [WARN] 无法检查 ground truth: {e}")
     
     if not issues:
         print(f"  [OK] 数据完整性检查通过!")
