@@ -1,0 +1,175 @@
+# SVOX Sun Test - 所有 VPR 方法 × 所有 Matcher
+!python run_image_matching_baseline.py --matcher superpoint-lg --vpr_method cosplace --dataset svox_sun_test --distance dot_product --device cuda ;\
+python run_image_matching_baseline.py --matcher loftr --vpr_method cosplace --dataset svox_sun_test --distance dot_product --device cuda ;\
+python run_image_matching_baseline.py --matcher superglue --vpr_method cosplace --dataset svox_sun_test --distance dot_product --device cuda ;\
+python run_image_matching_baseline.py --matcher superpoint-lg --vpr_method netvlad --dataset svox_sun_test --distance dot_product --device cuda ;\
+python run_image_matching_baseline.py --matcher loftr --vpr_method netvlad --dataset svox_sun_test --distance dot_product --device cuda ;\
+python run_image_matching_baseline.py --matcher superglue --vpr_method netvlad --dataset svox_sun_test --distance dot_product --device cuda ;\
+python run_image_matching_baseline.py --matcher superpoint-lg --vpr_method mixvpr --dataset svox_sun_test --distance dot_product --device cuda ;\
+python run_image_matching_baseline.py --matcher loftr --vpr_method mixvpr --dataset svox_sun_test --distance dot_product --device cuda ;\
+python run_image_matching_baseline.py --matcher superglue --vpr_method mixvpr --dataset svox_sun_test --distance dot_product --device cuda ;\
+python run_image_matching_baseline.py --matcher superpoint-lg --vpr_method megaloc --dataset svox_sun_test --distance dot_product --device cuda ;\
+python run_image_matching_baseline.py --matcher loftr --vpr_method megaloc --dataset svox_sun_test --distance dot_product --device cuda ;\
+python run_image_matching_baseline.py --matcher superglue --vpr_method megaloc --dataset svox_sun_test --distance dot_product --device cuda
+
+/content/drive/MyDrive/Visual-Place-Recognition-Project/image-matching-models/matching/third_party/LightGlue/lightglue/lightglue.py:24: FutureWarning: `torch.cuda.amp.custom_fwd(args...)` is deprecated. Please use `torch.amp.custom_fwd(args..., device_type='cuda')` instead.
+  @torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)
+
+================================================================================
+Image Matching Baseline Experiment
+================================================================================
+Matcher: superpoint-lg
+VPR Method: cosplace
+Dataset: svox_sun_test
+Distance Metric: dot_product
+Top-K: 20
+Device: cuda
+================================================================================
+
+Using VPR log: logs/baseline/cosplace_dot_product_svox_sun_test/2025-12-31_15-18-40
+
+Loading matcher: superpoint-lg...
+100% 4.96M/4.96M [00:00<00:00, 99.5MB/s]
+100% 45.3M/45.3M [00:00<00:00, 58.1MB/s]
+[OK] Matcher loaded
+Database folder: data/svox/images/test/gallery
+Queries folder: data/svox/images/test/queries
+
+================================================================================
+Processing VPR experiment: 2025-12-31_15-18-40
+================================================================================
+[DEBUG] Searching for images in:
+  Database: /content/drive/MyDrive/Visual-Place-Recognition-Project/data/svox/images/test/gallery
+  Queries: /content/drive/MyDrive/Visual-Place-Recognition-Project/data/svox/images/test/queries
+  Database exists: True
+  Queries exists: True
+[DEBUG] Queries directory contains 14278 files (total items: 14278)
+[DEBUG] Sample files in queries:
+    @0620193.45@5734559.77@201407@Q9tuz5rcr56sdnmcXjz2hg@F@.jpg (suffix: '.jpg')
+    @0620207.84@5735063.97@201407@M0uD73L9YeOf95ucCEhIOw@F@.jpg (suffix: '.jpg')
+    @0620206.29@5734560.76@201407@MEUYSjxJYfCgzO5Ex3o8qQ@B@.jpg (suffix: '.jpg')
+[DEBUG] Found 17166 files with extension *.jpg in database
+[DEBUG] Found 14278 files with extension *.jpg in queries
+Loaded 14278 queries, 17166 database images
+Database folder: data/svox/images/test/gallery (exists: True)
+Queries folder: data/svox/images/test/queries (exists: True)
+
+[DEBUG] VPR predictions shape: (14278, 20)
+[DEBUG] Ground truth shape: torch.Size([14278])
+[DEBUG] Prediction indices range: 0 to 17165
+[DEBUG] Database paths available: 0 to 17165
+Will match top-20 predictions per query
+[INFO] Found checkpoint: checkpoints/image_matching/2025-12-31_15-18-40_checkpoint.pkl
+[INFO] Loading checkpoint...
+[INFO] Resuming from query 8562/14278
+Matching queries:  70% 9988/14278 [1:02:19<2:50:20,  2.38s/it]
+[CHECKPOINT] Saved at query 9989/14278
+Matching queries:  80% 11415/14278 [2:00:16<1:55:28,  2.42s/it]
+[CHECKPOINT] Saved at query 11416/14278
+Matching queries:  90% 12842/14278 [2:58:34<59:37,  2.49s/it]  
+[CHECKPOINT] Saved at query 12843/14278
+Matching queries: 100% 14269/14278 [3:56:59<00:22,  2.45s/it]
+[CHECKPOINT] Saved at query 14270/14278
+Matching queries: 100% 14277/14278 [3:57:19<00:02,  2.46s/it]
+[CHECKPOINT] Saved at query 14278/14278
+Matching queries: 100% 14278/14278 [3:57:22<00:00,  2.49s/it]
+[INFO] Removed checkpoint file (computation completed)
+
+================================================================================
+Analysis: Inliers vs Prediction Correctness
+================================================================================
+Total matches: 285560
+Correct predictions: 4507
+Incorrect predictions: 281053
+
+--- Correct Predictions ---
+Mean inliers:   98.38
+Median inliers: 76.00
+Std inliers:    80.06
+
+--- Incorrect Predictions ---
+Mean inliers:   42.54
+Median inliers: 18.00
+Std inliers:    60.87
+
+--- Difference ---
+Mean difference: 55.85
+Ratio (correct/incorrect): 2.31x
+
+[CONCLUSION] Correct predictions have significantly MORE inliers!
+Inliers can be used as a reliability indicator.
+================================================================================
+
+
+[INFO] Saving results to pickle format first (more reliable): results/image_matching/superpoint-lg_cosplace_dot_product_svox_sun_test.pkl
+[OK] Results saved to pickle: results/image_matching/superpoint-lg_cosplace_dot_product_svox_sun_test.pkl
+[INFO] File size: 29.77 MB
+
+[INFO] Attempting to save as JSON format: results/image_matching/superpoint-lg_cosplace_dot_product_svox_sun_test.json
+
+[INFO] Preparing to save results to: results/image_matching/superpoint-lg_cosplace_dot_product_svox_sun_test.json
+[INFO] Converting NumPy types to Python native types...
+[INFO] Validating data integrity...
+[INFO] Testing JSON serialization...
+[INFO] Writing to temporary file: results/image_matching/superpoint-lg_cosplace_dot_product_svox_sun_test.json.tmp
+[OK] Results saved successfully to: results/image_matching/superpoint-lg_cosplace_dot_product_svox_sun_test.json
+[INFO] File size: 66.06 MB
+[OK] JSON saved successfully!
+
+[DONE] Experiment completed!
+Results saved to: results/image_matching/superpoint-lg_cosplace_dot_product_svox_sun_test.json
+
+/content/drive/MyDrive/Visual-Place-Recognition-Project/image-matching-models/matching/third_party/LightGlue/lightglue/lightglue.py:24: FutureWarning: `torch.cuda.amp.custom_fwd(args...)` is deprecated. Please use `torch.amp.custom_fwd(args..., device_type='cuda')` instead.
+  @torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)
+
+================================================================================
+Image Matching Baseline Experiment
+================================================================================
+Matcher: loftr
+VPR Method: cosplace
+Dataset: svox_sun_test
+Distance Metric: dot_product
+Top-K: 20
+Device: cuda
+================================================================================
+
+Using VPR log: logs/baseline/cosplace_dot_product_svox_sun_test/2025-12-31_15-18-40
+
+Loading matcher: loftr...
+100% 44.2M/44.2M [00:02<00:00, 16.6MB/s]
+[OK] Matcher loaded
+Database folder: data/svox/images/test/gallery
+Queries folder: data/svox/images/test/queries
+
+================================================================================
+Processing VPR experiment: 2025-12-31_15-18-40
+================================================================================
+[DEBUG] Searching for images in:
+  Database: /content/drive/MyDrive/Visual-Place-Recognition-Project/data/svox/images/test/gallery
+  Queries: /content/drive/MyDrive/Visual-Place-Recognition-Project/data/svox/images/test/queries
+  Database exists: True
+  Queries exists: True
+[DEBUG] Queries directory contains 14278 files (total items: 14278)
+[DEBUG] Sample files in queries:
+    @0620193.45@5734559.77@201407@Q9tuz5rcr56sdnmcXjz2hg@F@.jpg (suffix: '.jpg')
+    @0620207.84@5735063.97@201407@M0uD73L9YeOf95ucCEhIOw@F@.jpg (suffix: '.jpg')
+    @0620206.29@5734560.76@201407@MEUYSjxJYfCgzO5Ex3o8qQ@B@.jpg (suffix: '.jpg')
+[DEBUG] Found 17166 files with extension *.jpg in database
+[DEBUG] Found 14278 files with extension *.jpg in queries
+Loaded 14278 queries, 17166 database images
+Database folder: data/svox/images/test/gallery (exists: True)
+Queries folder: data/svox/images/test/queries (exists: True)
+
+[DEBUG] VPR predictions shape: (14278, 20)
+[DEBUG] Ground truth shape: torch.Size([14278])
+[DEBUG] Prediction indices range: 0 to 17165
+[DEBUG] Database paths available: 0 to 17165
+Will match top-20 predictions per query
+Matching queries:  10% 1426/14278 [59:21<8:42:59,  2.44s/it]
+[CHECKPOINT] Saved at query 1427/14278
+Matching queries:  20% 2853/14278 [1:57:08<7:51:52,  2.48s/it]
+[CHECKPOINT] Saved at query 2854/14278
+Matching queries:  20% 2857/14278 [1:57:18<7:46:52,  2.45s/it]
+
+
+python run_image_matching_baseline.py --matcher loftr --vpr_method cosplace --dataset svox_sun_test --distance dot_product --device cuda
