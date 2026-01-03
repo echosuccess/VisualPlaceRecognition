@@ -6,7 +6,9 @@
 
 import subprocess
 import sys
+import json
 from pathlib import Path
+from datetime import datetime
 
 def run_im_experiment(matcher, vpr_method, dataset, distance, device='cuda'):
     """运行单个Image Matching实验"""
@@ -72,18 +74,39 @@ def main():
     
     print(f"\n将运行 {len(experiments)} 个Image Matching实验")
     
-    # 检查哪些已经完成
+    # Checkpoint路径
+    checkpoint_path = Path("checkpoints/sfxs_val_image_matching.json")
+    
+    # 加载checkpoint
+    checkpoint_completed = []
+    if checkpoint_path.exists():
+        try:
+            with open(checkpoint_path, 'r', encoding='utf-8') as f:
+                checkpoint_data = json.load(f)
+            checkpoint_completed = checkpoint_data.get('completed', [])
+            if checkpoint_completed:
+                print(f"\n[CHECKPOINT] 从checkpoint恢复: {len(checkpoint_completed)} 个已完成实验")
+        except Exception as e:
+            print(f"[WARN] 无法加载checkpoint: {e}")
+    
+    # 检查哪些已经完成（包括checkpoint和实际文件）
     print("\n检查已完成实验:")
     completed = []
     remaining = []
     
     for exp in experiments:
+        exp_key = f"{exp['matcher']}_{exp['vpr_method']}"
         result_file = Path(f"results/image_matching/{exp['matcher']}_{exp['vpr_method']}_l2_{exp['dataset']}.json")
         result_file_pkl = Path(f"results/image_matching/{exp['matcher']}_{exp['vpr_method']}_l2_{exp['dataset']}.pkl")
         
-        if result_file.exists() or result_file_pkl.exists():
-            completed.append(f"{exp['matcher']}_{exp['vpr_method']}")
-            print(f"  ✅ {exp['matcher']} + {exp['vpr_method']}")
+        # 检查实际文件或checkpoint
+        if result_file.exists() or result_file_pkl.exists() or exp_key in checkpoint_completed:
+            completed.append(exp_key)
+            if result_file.exists() or result_file_pkl.exists():
+                print(f"  ✅ {exp['matcher']} + {exp['vpr_method']} (已完成)")
+            else:
+                print(f"  ⚠️  {exp['matcher']} + {exp['vpr_method']} (checkpoint标记为完成，但文件不存在，将重新运行)")
+                remaining.append(exp)
         else:
             remaining.append(exp)
     
@@ -92,12 +115,27 @@ def main():
     
     if not remaining:
         print("\n✅ 所有实验已完成！")
+        # 清理checkpoint
+        if checkpoint_path.exists():
+            checkpoint_path.unlink()
+            print(f"[INFO] 已清理checkpoint文件")
         return
     
     print(f"\n剩余: {len(remaining)}/{len(experiments)}")
     print("\n开始运行剩余实验...")
     
-    # 运行剩余实验
+    # 保存checkpoint的函数
+    def save_checkpoint(completed_list, checkpoint_path):
+        checkpoint_data = {
+            'completed': completed_list,
+            'timestamp': datetime.now().isoformat()
+        }
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(checkpoint_path, 'w', encoding='utf-8') as f:
+            json.dump(checkpoint_data, f, indent=2, ensure_ascii=False)
+        print(f"[CHECKPOINT] 已保存: {checkpoint_path}")
+    
+    # 运行剩余实验，每完成一个就保存checkpoint
     for i, exp in enumerate(remaining, 1):
         print(f"\n进度: {i}/{len(remaining)}")
         success = run_im_experiment(
@@ -107,12 +145,28 @@ def main():
             exp['distance']
         )
         
-        if not success:
+        if success:
+            # 验证文件确实存在
+            result_file = Path(f"results/image_matching/{exp['matcher']}_{exp['vpr_method']}_l2_{exp['dataset']}.json")
+            result_file_pkl = Path(f"results/image_matching/{exp['matcher']}_{exp['vpr_method']}_l2_{exp['dataset']}.pkl")
+            if result_file.exists() or result_file_pkl.exists():
+                exp_key = f"{exp['matcher']}_{exp['vpr_method']}"
+                completed.append(exp_key)
+                # 保存checkpoint
+                save_checkpoint(completed, checkpoint_path)
+                print(f"[CHECKPOINT] 实验 {exp_key} 完成，已保存checkpoint")
+        else:
             print(f"\n⚠️  实验失败，但继续运行下一个...")
     
     print("\n" + "="*80)
     print("所有实验完成！")
     print("="*80)
+    
+    # 清理checkpoint
+    if checkpoint_path.exists():
+        checkpoint_path.unlink()
+        print(f"[INFO] 已清理checkpoint文件（所有实验已完成）")
+    
     print("\n下一步：运行Extension 6.1")
     print("命令: python run_extension_6_1.py")
 

@@ -26,6 +26,7 @@ class Extension61Pipeline:
     def __init__(self, config):
         self.config = config
         self.results = {}
+        self.checkpoint_path = Path("checkpoints/extension_6_1.json")
         
     def step1_check_prerequisites(self):
         """检查前置条件：VPR结果是否存在"""
@@ -420,12 +421,41 @@ class Extension61Pipeline:
         # TODO: 实现更详细的成本分析图
         pass
     
+    def save_checkpoint(self, completed_steps):
+        """保存checkpoint"""
+        checkpoint_data = {
+            'completed_steps': completed_steps,
+            'results': self.results,
+            'timestamp': datetime.now().isoformat()
+        }
+        self.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.checkpoint_path, 'w', encoding='utf-8') as f:
+            json.dump(checkpoint_data, f, indent=2, ensure_ascii=False, default=str)
+        print(f"[CHECKPOINT] 已保存: {self.checkpoint_path}")
+    
+    def load_checkpoint(self):
+        """加载checkpoint"""
+        if self.checkpoint_path.exists():
+            try:
+                with open(self.checkpoint_path, 'r', encoding='utf-8') as f:
+                    checkpoint_data = json.load(f)
+                completed_steps = checkpoint_data.get('completed_steps', [])
+                self.results = checkpoint_data.get('results', {})
+                print(f"[CHECKPOINT] 从checkpoint恢复: {len(completed_steps)} 个已完成步骤")
+                return completed_steps
+            except Exception as e:
+                print(f"[WARN] 无法加载checkpoint: {e}")
+        return []
+    
     def run_full_pipeline(self):
         """运行完整流程"""
         print("\n" + "="*80)
         print("Extension 6.1 完整实验流程")
         print(f"开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*80)
+        
+        # 加载checkpoint
+        completed_steps = self.load_checkpoint()
         
         steps = [
             ("检查前置条件", self.step1_check_prerequisites),
@@ -438,6 +468,13 @@ class Extension61Pipeline:
         ]
         
         for step_name, step_func in steps:
+            # 检查是否已完成
+            if step_name in completed_steps:
+                print(f"\n{'='*80}")
+                print(f"⏭️  跳过（已完成）: {step_name}")
+                print(f"{'='*80}")
+                continue
+            
             print(f"\n{'='*80}")
             print(f"执行: {step_name}")
             print(f"{'='*80}")
@@ -446,12 +483,23 @@ class Extension61Pipeline:
             
             if not success:
                 print(f"\n❌ {step_name} 失败，停止流程")
+                print(f"[CHECKPOINT] 已保存当前进度，可以重新运行以继续")
                 return False
+            
+            # 标记为完成并保存checkpoint
+            completed_steps.append(step_name)
+            self.save_checkpoint(completed_steps)
+            print(f"[CHECKPOINT] 步骤 '{step_name}' 完成，已保存checkpoint")
         
         print("\n" + "="*80)
         print("✅ Extension 6.1 完整流程完成！")
         print(f"结束时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*80)
+        
+        # 清理checkpoint
+        if self.checkpoint_path.exists():
+            self.checkpoint_path.unlink()
+            print(f"[INFO] 已清理checkpoint文件（所有步骤已完成）")
         
         return True
 
