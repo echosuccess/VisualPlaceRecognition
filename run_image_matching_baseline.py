@@ -297,8 +297,8 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
             print("[INFO] Starting from scratch...")
             start_idx = 0
     
-    # 定期保存checkpoint的间隔（每处理10%的queries保存一次）
-    checkpoint_interval = max(1, num_queries // 10)
+    # 定期保存checkpoint的间隔（每处理1%的queries保存一次）
+    checkpoint_interval = max(1, num_queries // 100)
     
     for q_idx in tqdm(range(start_idx, num_queries), desc="Matching queries", initial=start_idx, total=num_queries):
         gt_idx = ground_truth[q_idx].item()
