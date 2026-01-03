@@ -657,6 +657,7 @@ def main():
     # 根据dataset参数推断database和queries路径
     # 数据集命名规则：
     # - sf_xs_test -> data/sf_xs/test/database, data/sf_xs/test/queries
+    # - sfxs_val -> data/sf_xs/val/database, data/sf_xs/val/queries
     # - tokyo_xs_test -> data/tokyo_xs/test/database, data/tokyo_xs/test/queries
     # - svox_sun_test -> data/svox/images/test/gallery, data/svox/images/test/queries
     # - svox_night_test -> data/svox/images/test/gallery, data/svox/images/test/queries_night
@@ -669,8 +670,12 @@ def main():
         else:  # sun
             database_folder = "data/svox/images/test/gallery"
             queries_folder = "data/svox/images/test/queries"
+    elif args.dataset == 'sfxs_val':
+        # SF-XS validation数据集：sfxs_val -> data/sf_xs/val/
+        database_folder = "data/sf_xs/val/database"
+        queries_folder = "data/sf_xs/val/queries"
     else:
-        # SF-XS 和 Tokyo-XS 数据集结构
+        # SF-XS test 和 Tokyo-XS 数据集结构
         dataset_name = args.dataset.replace('_test', '')  # 移除 _test 后缀
         database_folder = f"data/{dataset_name}/test/database"
         queries_folder = f"data/{dataset_name}/test/queries"
