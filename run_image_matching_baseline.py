@@ -277,13 +277,32 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
     skipped_predictions = 0
     
     # Checkpoint路径（用于定期保存中间结果）
-    # 注意：文件名包含matcher信息，避免多个matcher同时运行同一VPR实验时冲突
+    # 注意：文件名包含matcher、VPR方法和数据集信息，避免冲突且易于识别
     checkpoint_dir = Path("checkpoints/image_matching")
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    
+    # 确保matcher_name不为None
     if matcher_name is None:
         # 从matcher对象推断名称（作为后备方案）
         matcher_name = str(type(matcher).__name__).lower().replace('matcher', '').replace('_', '-')
-    checkpoint_path = checkpoint_dir / f"{matcher_name}_{vpr_log_dir.name}_checkpoint.pkl"
+    
+    # 使用VPR实验名称（包含VPR方法、距离和数据集）而不是只使用时间戳
+    # 确保vpr_log_dir是Path对象
+    vpr_log_dir_path = Path(vpr_log_dir) if not isinstance(vpr_log_dir, Path) else vpr_log_dir
+    vpr_exp_name = vpr_log_dir_path.parent.name  # 获取父目录名，即VPR实验名称
+    timestamp = vpr_log_dir_path.name  # 时间戳部分
+    
+    # 验证所有组件都有值
+    if not matcher_name or not vpr_exp_name or not timestamp:
+        raise ValueError(
+            f"Checkpoint命名失败: matcher_name={matcher_name}, "
+            f"vpr_exp_name={vpr_exp_name}, timestamp={timestamp}, "
+            f"vpr_log_dir={vpr_log_dir}"
+        )
+    
+    # 新格式：matcher_vpr_method_distance_dataset_timestamp_checkpoint.pkl
+    # 例如：superpoint-lg_cosplace_dot_product_svox_sun_test_2025-12-31_15-18-40_checkpoint.pkl
+    checkpoint_path = checkpoint_dir / f"{matcher_name}_{vpr_exp_name}_{timestamp}_checkpoint.pkl"
     
     # 尝试从checkpoint恢复
     start_idx = 0
