@@ -23,6 +23,10 @@ def verify_result_file(result_path):
     print(f"验证文件: {result_path.name}")
     print(f"{'='*80}")
     
+    # 检查文件名是否包含异常值
+    if '_12_' in result_path.name:
+        print(f"⚠️  警告: 文件名包含'12'，可能使用了错误的distance参数")
+    
     # 1. 检查文件是否存在
     if not result_path.exists():
         print(f"❌ 文件不存在: {result_path}")
@@ -87,8 +91,12 @@ def verify_result_file(result_path):
     
     required_keys = ['results', 'config']
     missing_keys = [k for k in required_keys if k not in data]
+    issues_found = []  # 用于收集所有问题
+    
     if missing_keys:
         print(f"⚠️  缺少必需的键: {missing_keys}")
+        if 'config' in missing_keys:
+            issues_found.append("缺少'config'键，无法验证实验参数（可能是旧版本脚本生成的）")
     else:
         print(f"✅ 数据结构完整")
     
@@ -148,6 +156,7 @@ def verify_result_file(result_path):
             print(f"⚠️  警告: inliers值异常大")
     
     # 检查正确性分布
+    issues_found = []
     if is_correct:
         num_correct = sum(1 for x in is_correct if x)
         num_incorrect = sum(1 for x in is_correct if not x)
@@ -155,6 +164,12 @@ def verify_result_file(result_path):
         print(f"\n正确性分布:")
         print(f"  正确预测: {num_correct} ({correct_ratio*100:.2f}%)")
         print(f"  错误预测: {num_incorrect} ({(1-correct_ratio)*100:.2f}%)")
+        
+        # 检查正确率是否异常低
+        if correct_ratio < 0.05:  # 低于5%
+            issues_found.append(f"正确率异常低 ({correct_ratio*100:.2f}%)，可能使用了错误的参数或数据有问题")
+        elif correct_ratio < 0.10:  # 低于10%
+            issues_found.append(f"正确率较低 ({correct_ratio*100:.2f}%)，建议检查")
     
     # 8. 验证config
     if 'config' in data:
@@ -170,8 +185,9 @@ def verify_result_file(result_path):
                 print(f"\n⚠️  警告: distance参数异常: '{distance}'")
                 print(f"   应该是 'l2' 或 'dot_product'")
                 if distance == '12':
-                    print(f"   检测到 '12'，这可能是错误的参数值")
-                    print(f"   建议检查VPR实验是否使用了正确的distance参数")
+                    issues_found.append(f"distance参数是'12'（错误），应该是'l2'或'dot_product'")
+                    print(f"   ❌ 检测到 '12'，这是错误的参数值！")
+                    print(f"   建议删除此文件并重新运行，使用正确的参数")
     
     # 9. 验证与VPR log的一致性
     if TORCH_AVAILABLE and 'config' in data and 'vpr_log_dir' in data['config']:
@@ -209,13 +225,46 @@ def verify_result_file(result_path):
     elif not TORCH_AVAILABLE:
         print(f"\n⚠️  PyTorch不可用，跳过VPR log对比")
     
-    print(f"\n✅ 验证完成: 文件看起来正常")
-    return True
+    # 检查文件名中的异常
+    if '_12_' in result_path.name:
+        issues_found.append("文件名包含'12'，说明使用了错误的distance参数（应该是'l2'或'dot_product'）")
+    
+    # 总结验证结果
+    print(f"\n{'='*80}")
+    print("验证总结")
+    print(f"{'='*80}")
+    
+    if issues_found:
+        print(f"❌ 发现 {len(issues_found)} 个严重问题:")
+        for i, issue in enumerate(issues_found, 1):
+            print(f"  {i}. {issue}")
+        print(f"\n⚠️  建议: 这个文件无效，需要删除并重新运行实验")
+        print(f"   删除命令: rm {result_path}")
+        print(f"   重新运行: 使用正确的参数 --distance l2 或 --distance dot_product")
+        return False
+    elif missing_keys:
+        print(f"⚠️  警告: 缺少 {len(missing_keys)} 个键，但数据基本完整")
+        print(f"✅ 文件结构基本正常")
+        return True
+    else:
+        print(f"✅ 验证完成: 文件看起来正常")
+        return True
 
 def verify_experiment(matcher, vpr_method, dataset, distance):
     """验证特定实验的结果"""
     result_file = f"results/image_matching/{matcher}_{vpr_method}_{distance}_{dataset}.json"
     return verify_result_file(result_file)
+
+def list_all_result_files():
+    """列出所有结果文件"""
+    results_dir = Path("results/image_matching")
+    
+    if not results_dir.exists():
+        print(f"❌ 结果目录不存在: {results_dir}")
+        return []
+    
+    json_files = sorted(results_dir.glob("*.json"))
+    return json_files
 
 def main():
     sys.stdout.reconfigure(encoding='utf-8')
@@ -228,8 +277,31 @@ def main():
     parser.add_argument('--dataset', type=str, help='数据集名称')
     parser.add_argument('--distance', type=str, help='距离度量')
     parser.add_argument('--check_all', action='store_true', help='检查所有结果文件')
+    parser.add_argument('--list', action='store_true', help='列出所有结果文件')
     
     args = parser.parse_args()
+    
+    if args.list:
+        # 列出所有文件
+        print("="*80)
+        print("所有结果文件列表")
+        print("="*80)
+        files = list_all_result_files()
+        if files:
+            print(f"\n找到 {len(files)} 个JSON文件:\n")
+            for f in files:
+                size_mb = f.stat().st_size / (1024**2)
+                print(f"  {f.name} ({size_mb:.2f} MB)")
+            
+            # 检查异常文件
+            abnormal = [f for f in files if '_12_' in f.name]
+            if abnormal:
+                print(f"\n⚠️  发现 {len(abnormal)} 个可能异常的文件（包含'12'）:")
+                for f in abnormal:
+                    print(f"  {f.name}")
+        else:
+            print("没有找到结果文件")
+        return
     
     if args.check_all:
         # 检查所有结果文件
@@ -268,12 +340,15 @@ def main():
     else:
         print("请指定要验证的文件或实验参数")
         print("\n示例:")
-        print("  # 验证单个文件")
-        print("  python verify_image_matching_result.py --file results/image_matching/loftr_cosplace_12_sfxs_val.json")
+        print("  # 列出所有文件")
+        print("  python verify_image_matching_result.py --list")
+        print("\n  # 验证单个文件")
+        print("  python verify_image_matching_result.py --file results/image_matching/loftr_cosplace_l2_sfxs_val.json")
         print("\n  # 验证特定实验")
         print("  python verify_image_matching_result.py --matcher loftr --vpr_method cosplace --dataset sfxs_val --distance l2")
         print("\n  # 验证所有文件")
         print("  python verify_image_matching_result.py --check_all")
+        print("\n提示: 如果文件不存在，先运行 --list 查看实际存在的文件")
 
 if __name__ == "__main__":
     main()
