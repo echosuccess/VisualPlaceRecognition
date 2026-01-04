@@ -69,7 +69,7 @@ def run_image_matching(matcher, query_path, database_path, device='cuda'):
         return 0
 
 
-def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder, top_k=20, device='cuda'):
+def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder, top_k=20, device='cuda', matcher_name=None):
     """
     处理一个VPR实验，对所有query运行Image Matching
     
@@ -277,9 +277,13 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
     skipped_predictions = 0
     
     # Checkpoint路径（用于定期保存中间结果）
+    # 注意：文件名包含matcher信息，避免多个matcher同时运行同一VPR实验时冲突
     checkpoint_dir = Path("checkpoints/image_matching")
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_path = checkpoint_dir / f"{vpr_log_dir.name}_checkpoint.pkl"
+    if matcher_name is None:
+        # 从matcher对象推断名称（作为后备方案）
+        matcher_name = str(type(matcher).__name__).lower().replace('matcher', '').replace('_', '-')
+    checkpoint_path = checkpoint_dir / f"{matcher_name}_{vpr_log_dir.name}_checkpoint.pkl"
     
     # 尝试从checkpoint恢复
     start_idx = 0
@@ -707,7 +711,8 @@ def main():
         database_folder=database_folder,
         queries_folder=queries_folder,
         top_k=args.top_k,
-        device=args.device
+        device=args.device,
+        matcher_name=args.matcher  # 传递matcher名称用于checkpoint文件名
     )
     
     # 4. 分析结果
