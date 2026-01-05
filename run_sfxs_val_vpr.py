@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-运行SF-XS val的VPR实验（Extension 6.1验证集）
+Run VPR experiments for SF-XS val (Extension 6.1 validation set)
 """
 
 import subprocess
@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime
 
 def run_vpr_experiment(method, backbone, dim, image_size, log_name):
-    """运行单个VPR实验"""
+    """Run a single VPR experiment"""
     
     cmd = [
         "python", "VPR-methods-evaluation/main.py",
@@ -33,21 +33,21 @@ def run_vpr_experiment(method, backbone, dim, image_size, log_name):
     ]
     
     print(f"\n{'='*80}")
-    print(f"运行: {log_name}")
+    print(f"Running: {log_name}")
     print(f"{'='*80}")
-    print(f"命令: {' '.join(cmd)}")
+    print(f"Command: {' '.join(cmd)}")
     print(f"{'='*80}\n")
     
     try:
         result = subprocess.run(cmd, check=True)
-        print(f"\n✅ {log_name} 完成！")
+        print(f"\n[OK] {log_name} completed!")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"\n❌ {log_name} 失败: {e}")
+        print(f"\n[ERROR] {log_name} failed: {e}")
         return False
 
 def save_checkpoint(completed_experiments, checkpoint_path):
-    """保存checkpoint"""
+    """Save checkpoint"""
     checkpoint_data = {
         'completed': completed_experiments,
         'timestamp': datetime.now().isoformat()
@@ -55,37 +55,33 @@ def save_checkpoint(completed_experiments, checkpoint_path):
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     with open(checkpoint_path, 'w', encoding='utf-8') as f:
         json.dump(checkpoint_data, f, indent=2, ensure_ascii=False)
-    print(f"[CHECKPOINT] 已保存: {checkpoint_path}")
+    print(f"[CHECKPOINT] Saved: {checkpoint_path}")
 
 def load_checkpoint(checkpoint_path):
-    """加载checkpoint"""
+    """Load checkpoint"""
     if checkpoint_path.exists():
         try:
             with open(checkpoint_path, 'r', encoding='utf-8') as f:
                 checkpoint_data = json.load(f)
             return checkpoint_data.get('completed', [])
         except Exception as e:
-            print(f"[WARN] 无法加载checkpoint: {e}")
+            print(f"[WARN] Failed to load checkpoint: {e}")
     return []
 
 def main():
-    """主函数"""
+    """Main function"""
     
     print("="*80)
-    print("SF-XS val VPR实验（Extension 6.1验证集）")
+    print("SF-XS val VPR Experiments (Extension 6.1 validation set)")
     print("="*80)
     
-    # Checkpoint路径
     checkpoint_path = Path("checkpoints/sfxs_val_vpr.json")
     
-    # 检查数据文件夹
     val_data_path = Path("data/sf_xs/val")
     if not val_data_path.exists():
-        print(f"\n❌ 错误: {val_data_path} 不存在！")
-        print("请先准备SF-XS val数据集")
+        print(f"\n[ERROR] {val_data_path} does not exist!")
+        print("Please prepare SF-XS val dataset first")
         return
-    
-    # 定义所有实验
     experiments = [
         {
             "method": "cosplace",
@@ -117,54 +113,48 @@ def main():
         }
     ]
     
-    print(f"\n将运行 {len(experiments)} 个VPR实验")
-    print("\n实验列表:")
+    print(f"\nWill run {len(experiments)} VPR experiments")
+    print("\nExperiment list:")
     for i, exp in enumerate(experiments, 1):
         print(f"  {i}. {exp['log_name']}")
     
-    # 加载checkpoint
     checkpoint_completed = load_checkpoint(checkpoint_path)
     if checkpoint_completed:
-        print(f"\n[CHECKPOINT] 从checkpoint恢复: {len(checkpoint_completed)} 个已完成实验")
+        print(f"\n[CHECKPOINT] Resumed from checkpoint: {len(checkpoint_completed)} completed experiments")
     
-    # 检查哪些已经完成（包括检查checkpoint和实际文件）
-    print("\n检查已完成实验:")
+    print("\nChecking completed experiments:")
     completed = []
     remaining = []
     
     for exp in experiments:
         log_dir = Path(f"logs/baseline/{exp['log_name']}")
-        # 检查实际文件
         z_data_files = list(log_dir.glob("**/z_data.torch"))
         
-        # 如果文件存在，或者checkpoint中标记为完成
         if z_data_files or exp['log_name'] in checkpoint_completed:
             completed.append(exp['log_name'])
             if z_data_files:
-                print(f"  ✅ {exp['log_name']} (已完成)")
+                print(f"  [OK] {exp['log_name']} (completed)")
             else:
-                print(f"  ⚠️  {exp['log_name']} (checkpoint标记为完成，但文件不存在，将重新运行)")
+                print(f"  [WARN] {exp['log_name']} (marked as completed in checkpoint, but file not found, will re-run)")
                 remaining.append(exp)
         else:
             remaining.append(exp)
     
     if completed:
-        print(f"\n已完成: {len(completed)}/{len(experiments)}")
+        print(f"\nCompleted: {len(completed)}/{len(experiments)}")
     
     if not remaining:
-        print("\n✅ 所有实验已完成！")
-        # 清理checkpoint
+        print("\n[OK] All experiments completed!")
         if checkpoint_path.exists():
             checkpoint_path.unlink()
-            print(f"[INFO] 已清理checkpoint文件")
+            print(f"[INFO] Checkpoint file cleaned up")
         return
     
-    print(f"\n剩余: {len(remaining)}/{len(experiments)}")
-    print("\n开始运行剩余实验...")
+    print(f"\nRemaining: {len(remaining)}/{len(experiments)}")
+    print("\nStarting remaining experiments...")
     
-    # 运行剩余实验，每完成一个就保存checkpoint
     for i, exp in enumerate(remaining, 1):
-        print(f"\n进度: {i}/{len(remaining)}")
+        print(f"\nProgress: {i}/{len(remaining)}")
         success = run_vpr_experiment(
             exp["method"],
             exp["backbone"],
@@ -174,28 +164,25 @@ def main():
         )
         
         if success:
-            # 验证文件确实存在
             log_dir = Path(f"logs/baseline/{exp['log_name']}")
             z_data_files = list(log_dir.glob("**/z_data.torch"))
             if z_data_files:
                 completed.append(exp['log_name'])
-                # 保存checkpoint
                 save_checkpoint(completed, checkpoint_path)
-                print(f"[CHECKPOINT] 实验 {exp['log_name']} 完成，已保存checkpoint")
+                print(f"[CHECKPOINT] Experiment {exp['log_name']} completed, checkpoint saved")
         else:
-            print(f"\n⚠️  实验失败，但继续运行下一个...")
+            print(f"\n[WARN] Experiment failed, but continuing with next...")
     
     print("\n" + "="*80)
-    print("所有实验完成！")
+    print("All experiments completed!")
     print("="*80)
     
-    # 清理checkpoint
     if checkpoint_path.exists():
         checkpoint_path.unlink()
-        print(f"[INFO] 已清理checkpoint文件（所有实验已完成）")
+        print(f"[INFO] Checkpoint file cleaned up (all experiments completed)")
     
-    print("\n下一步：运行SF-XS val的Image Matching实验")
-    print("命令: python run_sfxs_val_image_matching.py")
+    print("\nNext step: Run SF-XS val Image Matching experiments")
+    print("Command: python run_sfxs_val_image_matching.py")
 
 if __name__ == "__main__":
     main()

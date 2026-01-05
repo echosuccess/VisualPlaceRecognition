@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Baseline Task: 运行Image Matching方法
-- 对VPR的top-K预测运行Image Matching
-- 计算inliers数量
-- 分析inliers与预测正确性的关系
+Baseline Task: Run Image Matching methods
+- Run Image Matching on VPR top-K predictions
+- Count inliers
+- Analyze correlation between inliers and prediction correctness
 """
 
 import torch
@@ -16,14 +16,14 @@ from tqdm import tqdm
 import argparse
 import sys
 
-# 添加image-matching-models到路径
+# Add image-matching-models to path
 sys.path.insert(0, str(Path(__file__).parent / 'image-matching-models'))
 
 from matching import get_matcher
 
 
 def load_vpr_predictions(log_dir):
-    """加载VPR预测结果"""
+    """Load VPR prediction results"""
     data_file = log_dir / "z_data.torch"
     
     if not data_file.exists():
@@ -31,13 +31,13 @@ def load_vpr_predictions(log_dir):
     
     data = torch.load(data_file, map_location='cpu', weights_only=False)
     
-    # VPR保存的data包含：
-    # - predictions: (num_queries, K) - top-K预测的database索引  
-    # - distances: (num_queries, K) - 对应的距离/相似度
-    # - positives_per_query: list of lists - 每个query的所有正确匹配
-    # - database_utms: database的UTM坐标
+    # VPR data contains:
+    # - predictions: (num_queries, K) - top-K database indices
+    # - distances: (num_queries, K) - corresponding distances/similarities
+    # - positives_per_query: list of lists - all correct matches per query
+    # - database_utms: database UTM coordinates
     
-    # 需要从positives_per_query推断ground_truth（取第一个positive）
+    # Infer ground_truth from positives_per_query (use first positive)
     if 'positives_per_query' in data:
         ground_truth = torch.tensor([pos[0] if len(pos) > 0 else -1 
                                      for pos in data['positives_per_query']])
@@ -48,20 +48,17 @@ def load_vpr_predictions(log_dir):
 
 def run_image_matching(matcher, query_path, database_path, device='cuda'):
     """
-    运行Image Matching并返回inliers数量
+    Run Image Matching and return inlier count
     
     Returns:
-        num_inliers: int - RANSAC后的inliers数量
+        num_inliers: int - number of inliers after RANSAC
     """
     try:
-        # 加载图像
         img0 = matcher.load_image(str(query_path), resize=512)
         img1 = matcher.load_image(str(database_path), resize=512)
         
-        # 运行匹配
         result = matcher(img0, img1)
         
-        # 返回inliers数量
         return result['num_inliers']
     
     except Exception as e:
@@ -71,40 +68,40 @@ def run_image_matching(matcher, query_path, database_path, device='cuda'):
 
 def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder, top_k=20, device='cuda', matcher_name=None):
     """
-    处理一个VPR实验，对所有query运行Image Matching
+    Process a VPR experiment, run Image Matching for all queries
     
     Args:
-        vpr_log_dir: VPR实验日志目录
-        matcher: Image Matching模型
-        database_folder: database图像文件夹路径
-        queries_folder: queries图像文件夹路径
-        top_k: 对前K个预测运行匹配
-        device: 设备
+        vpr_log_dir: VPR experiment log directory
+        matcher: Image Matching model
+        database_folder: database image folder path
+        queries_folder: queries image folder path
+        top_k: match top-K predictions
+        device: device
     
     Returns:
-        results: dict包含所有匹配结果
+        results: dict containing all matching results
     """
     print(f"\n{'='*80}")
     print(f"Processing VPR experiment: {vpr_log_dir.name}")
     print(f"{'='*80}")
     
-    # 1. 加载VPR预测
+    # Load VPR predictions
     vpr_data = load_vpr_predictions(vpr_log_dir)
     
     predictions = vpr_data['predictions']  # (num_queries, K)
     ground_truth = vpr_data['ground_truth']  # (num_queries,)
     
-    # 2. 从文件系统获取图像路径
+    # Get image paths from file system
     database_folder_path = Path(database_folder)
     queries_folder_path = Path(queries_folder)
     
-    # 检查文件夹是否存在
+    # Check if folders exist
     if not database_folder_path.exists():
         raise FileNotFoundError(f"Database folder not found: {database_folder_path}")
     if not queries_folder_path.exists():
         raise FileNotFoundError(f"Queries folder not found: {queries_folder_path}")
     
-    # 尝试多种图像扩展名
+    # Try multiple image extensions
     image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG']
     database_paths = []
     queries_paths = []
@@ -115,19 +112,18 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
     print(f"  Database exists: {database_folder_path.exists()}")
     print(f"  Queries exists: {queries_folder_path.exists()}")
     
-    # 首先检查目录中实际有什么文件
+    # Check what files are actually in the directory
     if queries_folder_path.exists():
         all_items = list(queries_folder_path.iterdir())
         files_only = [f for f in all_items if f.is_file()]
         print(f"[DEBUG] Queries directory contains {len(files_only)} files (total items: {len(all_items)})")
         if files_only:
-            # 检查前几个文件的扩展名
             sample_files = files_only[:3]
             print(f"[DEBUG] Sample files in queries:")
             for f in sample_files:
                 print(f"    {f.name} (suffix: '{f.suffix}')")
     
-    # 尝试直接 glob 搜索
+    # Try direct glob search
     for ext in image_extensions:
         db_files = list(database_folder_path.glob(ext))
         q_files = list(queries_folder_path.glob(ext))
@@ -138,13 +134,13 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
         database_paths.extend(sorted(db_files))
         queries_paths.extend(sorted(q_files))
     
-    # 如果直接搜索没找到，尝试列出所有文件然后过滤
+    # If direct search found nothing, try listing all files and filtering
     if len(queries_paths) == 0 and queries_folder_path.exists():
         print(f"[DEBUG] Direct glob search found 0 queries, trying alternative method...")
         all_files = list(queries_folder_path.iterdir())
-        # 过滤出文件（不是目录）
+        # Filter out files (not directories)
         files = [f for f in all_files if f.is_file()]
-        # 检查扩展名（包括大小写变体）
+        # Check extensions (including case variants)
         valid_extensions = ['.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG']
         image_files = [f for f in files if f.suffix in valid_extensions]
         if image_files:
@@ -163,7 +159,7 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
             database_paths = sorted(set(image_files))
             print(f"[DEBUG] Found {len(database_paths)} database files using alternative method")
     
-    # 去重并排序
+    # Remove duplicates and sort
     database_paths = sorted(set(database_paths))
     queries_paths = sorted(set(queries_paths))
     
@@ -175,7 +171,7 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
     print(f"Database folder: {database_folder_path} (exists: {database_folder_path.exists()})")
     print(f"Queries folder: {queries_folder_path} (exists: {queries_folder_path.exists()})")
     
-    # 检查 VPR 预测中的索引范围
+    # Check index range in VPR predictions
     print(f"\n[DEBUG] VPR predictions shape: {predictions.shape}")
     print(f"[DEBUG] Ground truth shape: {ground_truth.shape}")
     if len(predictions) > 0:
@@ -185,16 +181,14 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
         print(f"[DEBUG] Database paths available: 0 to {num_database - 1}")
         
         if max_pred_idx >= num_database:
-            print(f"\n[WARN] ⚠️  VPR predictions contain indices up to {max_pred_idx}, but only {num_database} database images loaded!")
+            print(f"\n[WARN] VPR predictions contain indices up to {max_pred_idx}, but only {num_database} database images loaded!")
             print(f"[WARN] This indicates a mismatch between VPR experiment and current database files.")
             
-            # 统计有多少预测索引超出范围
             invalid_count = 0
             total_checked = 0
             sample_invalid = []
             
-            # 检查所有预测（但只采样一部分来统计）
-            check_sample = min(100, len(predictions))  # 检查前100个查询或全部
+            check_sample = min(100, len(predictions))
             for q_idx in range(check_sample):
                 for rank in range(predictions.shape[1]):
                     total_checked += 1
@@ -209,9 +203,8 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
                 print(f"[WARN] Found {invalid_count}/{total_checked} ({invalid_ratio*100:.1f}%) invalid indices in sample")
                 print(f"[WARN] Example invalid indices: {sample_invalid[:3]}")
                 
-                # 如果无效索引比例太高，给出严重警告
-                if invalid_ratio > 0.1:  # 超过10%的预测无效
-                    print(f"\n[ERROR] ❌ Too many invalid prediction indices ({invalid_ratio*100:.1f}%)!")
+                if invalid_ratio > 0.1:
+                    print(f"\n[ERROR] Too many invalid prediction indices ({invalid_ratio*100:.1f}%)!")
                     print(f"[ERROR] This suggests the database files don't match the VPR experiment.")
                     print(f"[ERROR] Options:")
                     print(f"  1. Re-run VPR experiment with the current database files")
@@ -222,19 +215,16 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
                     print(f"[WARN] Some predictions will be skipped, but most are valid.")
     
     if num_queries == 0:
-        # 尝试递归搜索
         print(f"[DEBUG] Trying recursive search...")
         all_files = list(queries_folder_path.rglob("*"))
         image_files = [f for f in all_files if f.suffix.lower() in ['.jpg', '.jpeg', '.png']]
         print(f"[DEBUG] Found {len(image_files)} image files recursively")
         if image_files:
             print(f"[DEBUG] First few files: {image_files[:5]}")
-            # 如果递归搜索找到了文件，使用这些文件
             queries_paths = sorted(set(image_files))
             num_queries = len(queries_paths)
             print(f"[INFO] Using {num_queries} query images found via recursive search")
         
-        # 同样检查database
         if len(database_paths) == 0:
             print(f"[DEBUG] Trying recursive search for database images...")
             all_db_files = list(database_folder_path.rglob("*"))
@@ -263,48 +253,39 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
     
     print(f"Will match top-{K} predictions per query")
     
-    # 2. 对每个query的top-K预测运行匹配
+    # Run matching for top-K predictions of each query
     results = {
         'query_ids': [],
-        'pred_ranks': [],  # 预测的rank (0表示top-1)
-        'is_correct': [],  # 预测是否正确
-        'num_inliers': [],  # inliers数量
+        'pred_ranks': [],  # prediction rank (0 means top-1)
+        'is_correct': [],  # whether prediction is correct
+        'num_inliers': [],  # number of inliers
         'query_paths': [],
         'database_paths': []
     }
     
-    # 统计跳过的预测数量
     skipped_predictions = 0
     
-    # Checkpoint路径（用于定期保存中间结果）
-    # 注意：文件名包含matcher、VPR方法和数据集信息，避免冲突且易于识别
+    # Checkpoint path for periodic saving
     checkpoint_dir = Path("checkpoints/image_matching")
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     
-    # 确保matcher_name不为None
     if matcher_name is None:
-        # 从matcher对象推断名称（作为后备方案）
         matcher_name = str(type(matcher).__name__).lower().replace('matcher', '').replace('_', '-')
     
-    # 使用VPR实验名称（包含VPR方法、距离和数据集）而不是只使用时间戳
-    # 确保vpr_log_dir是Path对象
     vpr_log_dir_path = Path(vpr_log_dir) if not isinstance(vpr_log_dir, Path) else vpr_log_dir
-    vpr_exp_name = vpr_log_dir_path.parent.name  # 获取父目录名，即VPR实验名称
-    timestamp = vpr_log_dir_path.name  # 时间戳部分
+    vpr_exp_name = vpr_log_dir_path.parent.name
+    timestamp = vpr_log_dir_path.name
     
-    # 验证所有组件都有值
     if not matcher_name or not vpr_exp_name or not timestamp:
         raise ValueError(
-            f"Checkpoint命名失败: matcher_name={matcher_name}, "
+            f"Checkpoint naming failed: matcher_name={matcher_name}, "
             f"vpr_exp_name={vpr_exp_name}, timestamp={timestamp}, "
             f"vpr_log_dir={vpr_log_dir}"
         )
     
-    # 新格式：matcher_vpr_method_distance_dataset_timestamp_checkpoint.pkl
-    # 例如：superpoint-lg_cosplace_dot_product_svox_sun_test_2025-12-31_15-18-40_checkpoint.pkl
     checkpoint_path = checkpoint_dir / f"{matcher_name}_{vpr_exp_name}_{timestamp}_checkpoint.pkl"
     
-    # 尝试从checkpoint恢复
+    # Try to resume from checkpoint
     start_idx = 0
     if checkpoint_path.exists():
         try:
@@ -320,21 +301,20 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
             print("[INFO] Starting from scratch...")
             start_idx = 0
     
-    # 定期保存checkpoint的间隔（每处理1%的queries保存一次）
+    # Checkpoint interval (save every 1% of queries)
     checkpoint_interval = max(1, num_queries // 100)
     
     for q_idx in tqdm(range(start_idx, num_queries), desc="Matching queries", initial=start_idx, total=num_queries):
         gt_idx = ground_truth[q_idx].item()
         query_path = Path(queries_paths[q_idx])
         
-        # 对top-K预测运行匹配
+        # Run matching for top-K predictions
         for rank in range(K):
             pred_idx = int(predictions[q_idx, rank].item())
             
-            # 检查索引是否有效
+            # Check if index is valid
             if pred_idx >= len(database_paths):
                 skipped_predictions += 1
-                # 只在每100个跳过时打印一次，避免输出过多
                 if skipped_predictions <= 5 or skipped_predictions % 100 == 0:
                     print(f"\n[WARN] Query {q_idx}, rank {rank}: pred_idx {pred_idx} >= database size {len(database_paths)}, skipping")
                 continue
@@ -347,10 +327,8 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
             
             database_path = Path(database_paths[pred_idx])
             
-            # 判断预测是否正确
             is_correct = (pred_idx == gt_idx)
             
-            # 运行Image Matching
             num_inliers = run_image_matching(
                 matcher, 
                 query_path, 
@@ -358,15 +336,14 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
                 device=device
             )
             
-            # 记录结果（确保所有类型都是Python原生类型）
             results['query_ids'].append(int(q_idx))
             results['pred_ranks'].append(int(rank))
             results['is_correct'].append(bool(is_correct))
-            results['num_inliers'].append(int(num_inliers))  # 确保转换为Python int
+            results['num_inliers'].append(int(num_inliers))
             results['query_paths'].append(str(query_path))
             results['database_paths'].append(str(database_path))
         
-        # 定期保存checkpoint
+        # Periodically save checkpoint
         if (q_idx + 1) % checkpoint_interval == 0 or (q_idx + 1) == num_queries:
             try:
                 checkpoint_data = {
@@ -381,7 +358,7 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
             except Exception as e:
                 print(f"\n[WARN] Failed to save checkpoint: {e}")
     
-    # 计算完成后，删除checkpoint（因为已经完成）
+    # Remove checkpoint after completion
     if checkpoint_path.exists():
         try:
             checkpoint_path.unlink()
@@ -389,11 +366,11 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
         except:
             pass
     
-    # 报告跳过的预测数量
+    # Report skipped predictions
     if skipped_predictions > 0:
         total_predictions = num_queries * K
         skip_ratio = skipped_predictions / total_predictions
-        print(f"\n[WARN] ⚠️  Skipped {skipped_predictions}/{total_predictions} ({skip_ratio*100:.1f}%) predictions due to invalid indices")
+        print(f"\n[WARN] Skipped {skipped_predictions}/{total_predictions} ({skip_ratio*100:.1f}%) predictions due to invalid indices")
         print(f"[WARN] This may affect the completeness of results.")
         print(f"[WARN] Consider re-running VPR experiment if database files don't match.")
     
@@ -402,15 +379,14 @@ def process_vpr_experiment(vpr_log_dir, matcher, database_folder, queries_folder
 
 def analyze_inliers_correlation(results):
     """
-    分析inliers数量与预测正确性的关系
+    Analyze correlation between inlier count and prediction correctness
     
     Args:
-        results: 匹配结果字典
+        results: matching results dictionary
     
     Returns:
-        analysis: 分析结果
+        analysis: analysis results
     """
-    # 检查结果是否为空
     if not results or len(results.get('num_inliers', [])) == 0:
         print("[WARN] No results to analyze!")
         return {
@@ -428,11 +404,9 @@ def analyze_inliers_correlation(results):
     inliers = np.array(results['num_inliers'], dtype=np.float64)
     is_correct = np.array(results['is_correct'], dtype=bool)
     
-    # 确保数组长度一致
     if len(inliers) != len(is_correct):
         raise ValueError(f"Array length mismatch: inliers={len(inliers)}, is_correct={len(is_correct)}")
     
-    # 分为正确预测和错误预测
     correct_inliers = inliers[is_correct] if len(inliers) > 0 else np.array([])
     incorrect_inliers = inliers[~is_correct] if len(inliers) > 0 else np.array([])
     
@@ -441,18 +415,15 @@ def analyze_inliers_correlation(results):
         'num_correct': int(np.sum(is_correct)),
         'num_incorrect': int(np.sum(~is_correct)),
         
-        # 正确预测的统计
         'correct_mean_inliers': float(np.mean(correct_inliers)) if len(correct_inliers) > 0 else 0,
         'correct_median_inliers': float(np.median(correct_inliers)) if len(correct_inliers) > 0 else 0,
         'correct_std_inliers': float(np.std(correct_inliers)) if len(correct_inliers) > 0 else 0,
         
-        # 错误预测的统计
         'incorrect_mean_inliers': float(np.mean(incorrect_inliers)) if len(incorrect_inliers) > 0 else 0,
         'incorrect_median_inliers': float(np.median(incorrect_inliers)) if len(incorrect_inliers) > 0 else 0,
         'incorrect_std_inliers': float(np.std(incorrect_inliers)) if len(incorrect_inliers) > 0 else 0,
     }
     
-    # 计算差异显著性
     if len(correct_inliers) > 0 and len(incorrect_inliers) > 0:
         analysis['difference'] = analysis['correct_mean_inliers'] - analysis['incorrect_mean_inliers']
         analysis['ratio'] = analysis['correct_mean_inliers'] / max(analysis['incorrect_mean_inliers'], 1)
@@ -461,9 +432,9 @@ def analyze_inliers_correlation(results):
 
 
 def convert_to_python_types(obj):
-    """递归地将NumPy类型转换为Python原生类型，以便JSON序列化"""
-    # 处理NumPy标量类型
-    # NumPy 2.0兼容：使用类型检查而不是可能被移除的别名
+    """Recursively convert NumPy types to Python native types for JSON serialization"""
+    # Handle NumPy scalar types
+    # NumPy 2.0 compatible: use type checking instead of potentially removed aliases
     if isinstance(obj, np.integer):
         return int(obj)
     elif isinstance(obj, np.floating):
@@ -483,7 +454,7 @@ def convert_to_python_types(obj):
 
 
 def validate_json_serializable(obj, path=""):
-    """递归验证对象是否可以JSON序列化"""
+    """Recursively validate if object can be JSON serialized"""
     try:
         if isinstance(obj, dict):
             for key, value in obj.items():
@@ -495,18 +466,15 @@ def validate_json_serializable(obj, path=""):
             for i, item in enumerate(obj):
                 validate_json_serializable(item, f"{path}[{i}]")
         else:
-            # 尝试序列化单个值
             json.dumps(obj)
     except (TypeError, ValueError) as e:
         raise ValueError(f"Cannot serialize object at {path}: {type(obj).__name__} - {e}")
 
 
 def test_json_serialization(data):
-    """测试数据是否可以JSON序列化"""
+    """Test if data can be JSON serialized"""
     try:
-        # 先尝试序列化到字符串
         json_str = json.dumps(data, indent=2)
-        # 再尝试反序列化验证
         json.loads(json_str)
         return True, None
     except Exception as e:
@@ -514,16 +482,14 @@ def test_json_serialization(data):
 
 
 def save_results(results, analysis, output_path):
-    """保存结果，带完整的验证和错误处理"""
+    """Save results with validation and error handling"""
     print(f"\n[INFO] Preparing to save results to: {output_path}")
     
-    # 1. 构建输出数据
     output = {
         'results': results,
         'analysis': analysis
     }
     
-    # 2. 转换所有NumPy类型为Python原生类型
     print("[INFO] Converting NumPy types to Python native types...")
     try:
         output = convert_to_python_types(output)
@@ -531,7 +497,6 @@ def save_results(results, analysis, output_path):
         print(f"[ERROR] Failed to convert types: {e}")
         raise
     
-    # 3. 验证数据完整性
     print("[INFO] Validating data integrity...")
     try:
         validate_json_serializable(output)
@@ -539,23 +504,19 @@ def save_results(results, analysis, output_path):
         print(f"[ERROR] Data validation failed: {e}")
         raise
     
-    # 4. 测试JSON序列化（不实际写入文件）
     print("[INFO] Testing JSON serialization...")
     success, error_msg = test_json_serialization(output)
     if not success:
         print(f"[ERROR] JSON serialization test failed: {error_msg}")
         print("[INFO] Attempting to identify problematic data...")
-        # 尝试找出问题数据
         try:
             validate_json_serializable(output)
         except ValueError as e:
             print(f"[ERROR] Problematic data location: {e}")
         raise ValueError(f"Cannot serialize to JSON: {error_msg}")
     
-    # 5. 创建输出目录
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    # 6. 实际保存（先写入临时文件，成功后再重命名）
     temp_path = output_path.with_suffix('.json.tmp')
     print(f"[INFO] Writing to temporary file: {temp_path}")
     
@@ -563,25 +524,20 @@ def save_results(results, analysis, output_path):
         with open(temp_path, 'w', encoding='utf-8') as f:
             json.dump(output, f, indent=2, ensure_ascii=False)
         
-        # 验证文件是否成功写入
         if not temp_path.exists() or temp_path.stat().st_size == 0:
             raise ValueError("File was not written or is empty")
         
-        # 验证文件可以读取
         with open(temp_path, 'r', encoding='utf-8') as f:
             loaded = json.load(f)
         
-        # 验证加载的数据结构
         assert 'results' in loaded, "Missing 'results' key"
         assert 'analysis' in loaded, "Missing 'analysis' key"
         
-        # 重命名为正式文件
         temp_path.rename(output_path)
         print(f"[OK] Results saved successfully to: {output_path}")
         print(f"[INFO] File size: {output_path.stat().st_size / (1024*1024):.2f} MB")
-        
+    
     except Exception as e:
-        # 如果失败，清理临时文件
         if temp_path.exists():
             print(f"[WARN] Keeping temporary file for recovery: {temp_path}")
         print(f"[ERROR] Failed to save results: {e}")
@@ -589,7 +545,7 @@ def save_results(results, analysis, output_path):
 
 
 def print_analysis(analysis):
-    """打印分析结果"""
+    """Print analysis results"""
     print(f"\n{'='*80}")
     print("Analysis: Inliers vs Prediction Correctness")
     print(f"{'='*80}")
@@ -654,7 +610,7 @@ def main():
     print(f"Device: {args.device}")
     print(f"{'='*80}\n")
     
-    # 1. 找到VPR实验日志目录
+    # Find VPR experiment log directory
     vpr_exp_name = f"{args.vpr_method}_{args.distance}_{args.dataset}"
     vpr_log_base = Path("logs/baseline") / vpr_exp_name
     
@@ -662,7 +618,6 @@ def main():
         print(f"[ERROR] VPR log directory not found: {vpr_log_base}")
         return
     
-    # 找到最新的时间戳目录
     timestamp_dirs = sorted([d for d in vpr_log_base.iterdir() if d.is_dir()])
     if not timestamp_dirs:
         print(f"[ERROR] No timestamp directory found in {vpr_log_base}")
@@ -671,42 +626,30 @@ def main():
     vpr_log_dir = timestamp_dirs[-1]
     print(f"Using VPR log: {vpr_log_dir}")
     
-    # 2. 初始化Image Matching模型
+    # Initialize Image Matching model
     print(f"\nLoading matcher: {args.matcher}...")
     matcher = get_matcher(args.matcher, device=args.device)
     print(f"[OK] Matcher loaded")
     
-    # 3. 构建数据路径（根据VPR方法和数据集）
-    # 根据dataset参数推断database和queries路径
-    # 数据集命名规则：
-    # - sf_xs_test -> data/sf_xs/test/database, data/sf_xs/test/queries
-    # - sfxs_val -> data/sf_xs/val/database, data/sf_xs/val/queries
-    # - tokyo_xs_test -> data/tokyo_xs/test/database, data/tokyo_xs/test/queries
-    # - svox_sun_test -> data/svox/images/test/gallery, data/svox/images/test/queries
-    # - svox_night_test -> data/svox/images/test/gallery, data/svox/images/test/queries_night
-    
+    # Build data paths based on dataset
     if 'svox' in args.dataset:
-        # SVOX数据集特殊结构
         if 'night' in args.dataset:
             database_folder = "data/svox/images/test/gallery"
             queries_folder = "data/svox/images/test/queries_night"
-        else:  # sun
+        else:
             database_folder = "data/svox/images/test/gallery"
             queries_folder = "data/svox/images/test/queries"
     elif args.dataset == 'sfxs_val':
-        # SF-XS validation数据集：sfxs_val -> data/sf_xs/val/
         database_folder = "data/sf_xs/val/database"
         queries_folder = "data/sf_xs/val/queries"
     else:
-        # SF-XS test 和 Tokyo-XS 数据集结构
-        dataset_name = args.dataset.replace('_test', '')  # 移除 _test 后缀
+        dataset_name = args.dataset.replace('_test', '')
         database_folder = f"data/{dataset_name}/test/database"
         queries_folder = f"data/{dataset_name}/test/queries"
     
     print(f"Database folder: {database_folder}")
     print(f"Queries folder: {queries_folder}")
     
-    # 验证路径是否存在（提前检查，避免浪费时间）
     if not Path(database_folder).exists():
         print(f"[ERROR] Database folder does not exist: {database_folder}")
         print(f"[INFO] Please check if the dataset is downloaded and the path is correct")
@@ -716,14 +659,12 @@ def main():
         print(f"[INFO] Please check if the dataset is downloaded and the path is correct")
         return
     
-    # 检查是否已有结果文件
     output_path = Path(args.output_dir) / f"{args.matcher}_{vpr_exp_name}.json"
     if output_path.exists():
         print(f"[INFO] Result file already exists: {output_path}")
         print("[INFO] Skipping computation. Delete the file to re-run.")
         return
     
-    # 运行Image Matching
     results = process_vpr_experiment(
         vpr_log_dir=vpr_log_dir,
         matcher=matcher,
@@ -731,14 +672,12 @@ def main():
         queries_folder=queries_folder,
         top_k=args.top_k,
         device=args.device,
-        matcher_name=args.matcher  # 传递matcher名称用于checkpoint文件名
+        matcher_name=args.matcher
     )
     
-    # 4. 分析结果
     analysis = analyze_inliers_correlation(results)
     print_analysis(analysis)
     
-    # 5. 先保存为pickle格式（更可靠，即使JSON失败也能恢复）
     pickle_path = output_path.with_suffix('.pkl')
     print(f"\n[INFO] Saving results to pickle format first (more reliable): {pickle_path}")
     try:
@@ -762,13 +701,12 @@ def main():
         print(f"[ERROR] Failed to save pickle: {e}")
         raise
     
-    # 6. 然后尝试保存为JSON格式（用于分析脚本）
+    # Try to save as JSON format
     print(f"\n[INFO] Attempting to save as JSON format: {output_path}")
     try:
         save_results(results, analysis, output_path)
         print(f"[OK] JSON saved successfully!")
     except Exception as e:
-        # JSON保存失败，但pickle已保存，所以结果不会丢失
         print(f"\n[WARN] Failed to save JSON format: {e}")
         print(f"[INFO] BUT: Results are safely saved in pickle format: {pickle_path}")
         print(f"[INFO] You can load the pickle file to recover all data:")
@@ -777,34 +715,7 @@ def main():
         print(f"          data = pickle.load(f)")
         print(f"      results = data['results']")
         print(f"      analysis = data['analysis']")
-        # 不抛出异常，因为pickle已成功保存
         return
-        # 如果保存失败，尝试保存基本信息以便恢复
-        print(f"\n[ERROR] Failed to save results: {e}")
-        print("[INFO] Attempting to save minimal recovery data...")
-        
-        # 保存基本信息（不包含完整results，只保存analysis）
-        recovery_path = output_path.with_suffix('.recovery.json')
-        try:
-            recovery_data = {
-                'analysis': convert_to_python_types(analysis),
-                'error': str(e),
-                'num_results': len(results.get('query_ids', [])),
-                'timestamp': str(Path().cwd())
-            }
-            with open(recovery_path, 'w', encoding='utf-8') as f:
-                json.dump(recovery_data, f, indent=2, ensure_ascii=False)
-            print(f"[INFO] Recovery data saved to: {recovery_path}")
-        except Exception as recovery_error:
-            print(f"[WARN] Could not save recovery data: {recovery_error}")
-        
-        # 检查是否有临时文件
-        temp_path = output_path.with_suffix('.json.tmp')
-        if temp_path.exists():
-            print(f"[INFO] Temporary file exists at: {temp_path}")
-            print("[INFO] You can try to manually recover data from the temp file.")
-        
-        raise
     
     print(f"\n[DONE] Experiment completed!")
     print(f"Results saved to: {output_path}\n")

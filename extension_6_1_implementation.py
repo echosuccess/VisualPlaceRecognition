@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
 Extension 6.1: Adaptive Re-ranking Implementation
-自适应Re-ranking实现
 
-核心思路：
-- 只对"困难"查询应用re-ranking
-- "困难"定义：inliers数量低于阈值
-- 两种方法：硬阈值 or 逻辑回归
+Core idea:
+- Apply re-ranking only to "hard" queries
+- "Hard" definition: inlier count below threshold
+- Two methods: hard threshold or logistic regression
 """
 
 import numpy as np
@@ -23,12 +22,12 @@ import pickle
 
 
 class AdaptiveReranking:
-    """自适应Re-ranking系统"""
+    """Adaptive Re-ranking system"""
     
     def __init__(self, method="threshold"):
         """
         Args:
-            method: "threshold" 或 "logistic"
+            method: "threshold" or "logistic"
         """
         self.method = method
         self.threshold = None
@@ -36,14 +35,13 @@ class AdaptiveReranking:
         
     def load_data(self, preds_dir: Path, im_result_json: Path = None, inliers_dir: Path = None):
         """
-        加载VPR预测和inliers数据
+        Load VPR predictions and inliers data
         
         Args:
-            preds_dir: VPR预测结果目录（包含z_data.torch）
-            im_result_json: Image Matching JSON结果文件路径（新格式，优先使用）
-            inliers_dir: Image Matching结果目录（包含inliers.npy，旧格式，兼容用）
+            preds_dir: VPR prediction results directory (contains z_data.torch)
+            im_result_json: Image Matching JSON result file path (new format, preferred)
+            inliers_dir: Image Matching results directory (contains inliers.npy, old format, for compatibility)
         """
-        # 加载VPR预测数据
         z_data_path = list(Path(preds_dir).glob("**/z_data.torch"))[0]
         z_data = torch.load(z_data_path, map_location='cpu', weights_only=False)
         
@@ -51,55 +49,45 @@ class AdaptiveReranking:
         positives_per_query = z_data['positives_per_query']
         database_utms = z_data['database_utms']
         
-        # 优先从JSON文件加载inliers（新格式）
         if im_result_json and Path(im_result_json).exists():
             with open(im_result_json, 'r', encoding='utf-8') as f:
                 im_data = json.load(f)
             
-            # 从JSON提取inliers（所有top-K预测的inliers，用于re-ranking）
             num_inliers = im_data['results']['num_inliers']
             pred_ranks = im_data['results']['pred_ranks']
             query_ids = im_data['results']['query_ids']
             is_correct_json = im_data['results']['is_correct']
             
-            # 构建每个查询的top-K inliers矩阵
             num_queries = len(predictions)
             top_k = predictions.shape[1] if len(predictions.shape) > 1 else 1
             
-            # 初始化inliers矩阵：每个查询的top-K预测的inliers
             inliers_matrix = np.zeros((num_queries, top_k), dtype=np.float64)
             top1_inliers = np.zeros(num_queries, dtype=np.float64)
             top1_is_correct = np.zeros(num_queries, dtype=bool)
             
-            # 按query_id和pred_rank组织数据
             for i, (q_idx, rank, inlier_count, correct) in enumerate(zip(query_ids, pred_ranks, num_inliers, is_correct_json)):
                 if q_idx < num_queries and rank < top_k:
                     inliers_matrix[q_idx, rank] = inlier_count
-                    if rank == 0:  # top-1预测
+                    if rank == 0:
                         top1_inliers[q_idx] = inlier_count
                         top1_is_correct[q_idx] = correct
             
-            # 转换为数组（保持与predictions长度一致）
             inliers = top1_inliers
             is_correct = top1_is_correct
             
-            # 存储完整的inliers矩阵用于re-ranking
             self.inliers_matrix = inliers_matrix
             
-        # 兼容旧格式：从inliers.npy加载
         elif inliers_dir and Path(inliers_dir).exists():
             inliers_path = list(Path(inliers_dir).glob("**/inliers.npy"))[0]
             inliers_array = np.load(inliers_path)
-            inliers = inliers_array[:, 0]  # 只使用第一个预测的inliers
+            inliers = inliers_array[:, 0]
             
-            # 计算ground truth标签
             is_correct = []
             for q_idx, pred_indices in enumerate(predictions):
                 top1_pred = pred_indices[0]
                 is_correct.append(top1_pred in positives_per_query[q_idx])
             is_correct = np.array(is_correct, dtype=bool)
             
-            # 旧格式没有完整的inliers矩阵，使用top-1 inliers作为近似
             top_k = predictions.shape[1] if len(predictions.shape) > 1 else 1
             inliers_matrix = np.zeros((len(predictions), top_k), dtype=np.float64)
             inliers_matrix[:, 0] = inliers
@@ -107,7 +95,6 @@ class AdaptiveReranking:
         else:
             raise FileNotFoundError(f"Neither JSON file nor inliers.npy found. JSON: {im_result_json}, inliers_dir: {inliers_dir}")
         
-        # 确保长度一致
         if len(inliers) != len(predictions):
             print(f"[WARN] Inliers length ({len(inliers)}) != predictions length ({len(predictions)}). Truncating...")
             min_len = min(len(inliers), len(predictions))
@@ -129,26 +116,24 @@ class AdaptiveReranking:
     
     def fit_threshold(self, train_data: Dict, val_data: Dict):
         """
-        使用网格搜索找最优阈值
+        Find optimal threshold using grid search
         
-        策略：尝试不同阈值，选择在验证集上R@1最高的
+        Strategy: try different thresholds, select the one with highest R@1 on validation set
         """
         train_inliers = train_data['inliers']
         
-        # 定义候选阈值（基于训练集inliers分布）
         percentiles = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
         candidate_thresholds = [np.percentile(train_inliers, p) for p in percentiles]
         candidate_thresholds = [0] + candidate_thresholds + [np.max(train_inliers)]
         
-        print(f"\n搜索最优阈值...")
-        print(f"候选阈值范围: {min(candidate_thresholds):.1f} - {max(candidate_thresholds):.1f}")
+        print(f"\nSearching for optimal threshold...")
+        print(f"Candidate threshold range: {min(candidate_thresholds):.1f} - {max(candidate_thresholds):.1f}")
         
         best_threshold = None
         best_val_score = -1
         results = []
         
         for threshold in tqdm(candidate_thresholds):
-            # 在验证集上评估这个阈值
             val_score, val_rerank_ratio = self._evaluate_threshold(
                 threshold, val_data
             )
@@ -164,38 +149,33 @@ class AdaptiveReranking:
                 best_threshold = threshold
         
         self.threshold = best_threshold
-        print(f"\n✅ 最优阈值: {best_threshold:.1f}")
-        print(f"   验证集R@1: {best_val_score:.2%}")
+        print(f"\n[OK] Optimal threshold: {best_threshold:.1f}")
+        print(f"   Validation R@1: {best_val_score:.2%}")
         
         return results
     
     def _evaluate_threshold(self, threshold: float, data: Dict) -> Tuple[float, float]:
         """
-        评估给定阈值的性能（实际执行re-ranking）
+        Evaluate performance of given threshold (actually performs re-ranking)
         
         Returns:
-            (R@1得分, re-ranking比例)
+            (R@1 score, re-ranking ratio)
         """
         inliers = data['inliers']
         predictions = data['predictions']
         positives_per_query = data['positives_per_query']
         
-        # 决定哪些查询需要re-ranking
         need_rerank = inliers < threshold
         rerank_ratio = np.mean(need_rerank)
         
-        # 实际执行re-ranking：对需要rerank的查询，基于inliers重新排序
         correct_count = 0
         for q_idx, pred_indices in enumerate(predictions):
             if need_rerank[q_idx] and hasattr(self, 'inliers_matrix'):
-                # 需要rerank：基于inliers重新排序top-K预测
                 query_inliers = self.inliers_matrix[q_idx, :len(pred_indices)]
-                # 按inliers降序排序
                 sorted_indices = np.argsort(query_inliers)[::-1]
                 reranked_preds = pred_indices[sorted_indices]
                 top1_pred = reranked_preds[0]
             else:
-                # 不需要rerank：使用原始top-1预测
                 top1_pred = pred_indices[0]
             
             is_correct = top1_pred in positives_per_query[q_idx]
@@ -207,29 +187,27 @@ class AdaptiveReranking:
     
     def fit_logistic(self, train_data: Dict, val_data: Dict):
         """
-        训练逻辑回归模型
+        Train logistic regression model
         
-        特征：
-        - inliers数量
-        - inliers数量 / 图像尺寸（归一化）
-        - 其他可能的特征...
+        Features:
+        - inlier count
+        - log(inlier count)
+        - normalized inlier count
         
-        标签：
-        - 1: 查询错误（需要re-ranking）
-        - 0: 查询正确（不需要re-ranking）
+        Labels:
+        - 1: query is incorrect (needs re-ranking)
+        - 0: query is correct (no re-ranking needed)
         """
-        # 准备训练数据
         X_train = self._extract_features(train_data)
-        y_train = (~train_data['is_correct']).astype(int)  # 错误=1，正确=0
+        y_train = (~train_data['is_correct']).astype(int)
         
         X_val = self._extract_features(val_data)
         y_val = (~val_data['is_correct']).astype(int)
         
-        print(f"\n训练逻辑回归模型...")
-        print(f"训练集样本数: {len(X_train)} (需要rerank: {y_train.sum()})")
-        print(f"验证集样本数: {len(X_val)} (需要rerank: {y_val.sum()})")
+        print(f"\nTraining logistic regression model...")
+        print(f"Training samples: {len(X_train)} (need rerank: {y_train.sum()})")
+        print(f"Validation samples: {len(X_val)} (need rerank: {y_val.sum()})")
         
-        # 网格搜索最优超参数
         param_grid = {
             'C': [0.001, 0.01, 0.1, 1, 10, 100],
             'class_weight': ['balanced', None]
@@ -243,16 +221,15 @@ class AdaptiveReranking:
         
         self.logistic_model = grid_search.best_estimator_
         
-        # 在验证集上评估
         y_val_pred = self.logistic_model.predict(X_val)
         val_acc = accuracy_score(y_val, y_val_pred)
         val_prec, val_rec, val_f1, _ = precision_recall_fscore_support(
             y_val, y_val_pred, average='binary'
         )
         
-        print(f"\n✅ 最优超参数: {grid_search.best_params_}")
-        print(f"   验证集准确率: {val_acc:.2%}")
-        print(f"   精确率: {val_prec:.2%}, 召回率: {val_rec:.2%}, F1: {val_f1:.2%}")
+        print(f"\n[OK] Best hyperparameters: {grid_search.best_params_}")
+        print(f"   Validation accuracy: {val_acc:.2%}")
+        print(f"   Precision: {val_prec:.2%}, Recall: {val_rec:.2%}, F1: {val_f1:.2%}")
         
         return {
             'best_params': grid_search.best_params_,
@@ -264,60 +241,58 @@ class AdaptiveReranking:
     
     def _extract_features(self, data: Dict) -> np.ndarray:
         """
-        提取特征用于逻辑回归
+        Extract features for logistic regression
         
-        当前特征：
-        - inliers数量
-        - log(inliers+1) 
-        - inliers数量的归一化（除以最大值）
+        Features:
+        - inlier count
+        - log(inliers+1)
+        - normalized inlier count
         """
         inliers = data['inliers']
         
-        # 特征工程
         features = np.column_stack([
-            inliers,                          # 原始inliers数量
-            np.log1p(inliers),                # log变换
-            inliers / (np.max(inliers) + 1),  # 归一化
+            inliers,
+            np.log1p(inliers),
+            inliers / (np.max(inliers) + 1),
         ])
         
         return features
     
     def predict_need_rerank(self, data: Dict) -> np.ndarray:
         """
-        预测哪些查询需要re-ranking
+        Predict which queries need re-ranking
         
         Returns:
-            布尔数组，True表示需要re-ranking
+            Boolean array, True means needs re-ranking
         """
         if self.method == "threshold":
             if self.threshold is None:
-                raise ValueError("需要先调用fit_threshold()训练阈值")
+                raise ValueError("Must call fit_threshold() first to train threshold")
             return data['inliers'] < self.threshold
         
         elif self.method == "logistic":
             if self.logistic_model is None:
-                raise ValueError("需要先调用fit_logistic()训练模型")
+                raise ValueError("Must call fit_logistic() first to train model")
             X = self._extract_features(data)
             return self.logistic_model.predict(X).astype(bool)
         
         else:
-            raise ValueError(f"未知方法: {self.method}")
+            raise ValueError(f"Unknown method: {self.method}")
     
     def evaluate(self, data: Dict, reranked_results: Dict = None) -> Dict:
         """
-        评估自适应re-ranking策略（实际执行re-ranking）
+        Evaluate adaptive re-ranking strategy (actually performs re-ranking)
         
         Args:
-            data: 包含inliers和predictions的字典
-            reranked_results: re-ranking后的结果（如果有，未使用）
+            data: dictionary containing inliers and predictions
+            reranked_results: re-ranked results (if any, unused)
         
         Returns:
-            评估指标字典
+            evaluation metrics dictionary
         """
         need_rerank = self.predict_need_rerank(data)
         rerank_ratio = np.mean(need_rerank)
         
-        # 计算原始R@1（不rerank）
         predictions = data['predictions']
         positives_per_query = data['positives_per_query']
         
@@ -329,18 +304,14 @@ class AdaptiveReranking:
         
         r1_without_rerank = correct_count_without / len(predictions)
         
-        # 计算rerank后的R@1（实际执行re-ranking）
         correct_count_with = 0
         for q_idx, pred_indices in enumerate(predictions):
             if need_rerank[q_idx] and hasattr(self, 'inliers_matrix'):
-                # 需要rerank：基于inliers重新排序top-K预测
                 query_inliers = self.inliers_matrix[q_idx, :len(pred_indices)]
-                # 按inliers降序排序
                 sorted_indices = np.argsort(query_inliers)[::-1]
                 reranked_preds = pred_indices[sorted_indices]
                 top1_pred = reranked_preds[0]
             else:
-                # 不需要rerank：使用原始top-1预测
                 top1_pred = pred_indices[0]
             
             is_correct = top1_pred in positives_per_query[q_idx]
@@ -354,11 +325,11 @@ class AdaptiveReranking:
             'rerank_ratio': rerank_ratio,
             'num_rerank': int(np.sum(need_rerank)),
             'total_queries': len(predictions),
-            'cost_saving': 1.0 - rerank_ratio  # 节省的成本比例
+            'cost_saving': 1.0 - rerank_ratio
         }
     
     def save(self, save_path: Path):
-        """保存模型"""
+        """Save model"""
         save_path = Path(save_path)
         save_path.mkdir(parents=True, exist_ok=True)
         
@@ -370,30 +341,30 @@ class AdaptiveReranking:
             with open(save_path / "logistic_model.pkl", 'wb') as f:
                 pickle.dump(self.logistic_model, f)
         
-        print(f"✅ 模型已保存到: {save_path}")
+        print(f"[OK] Model saved to: {save_path}")
     
     def load(self, load_path: Path):
-        """加载模型"""
+        """Load model"""
         load_path = Path(load_path)
         
         if self.method == "threshold":
             with open(load_path / "threshold.txt", 'r') as f:
                 self.threshold = float(f.read().strip())
-            print(f"✅ 已加载阈值: {self.threshold}")
+            print(f"[OK] Loaded threshold: {self.threshold}")
         
         elif self.method == "logistic":
             with open(load_path / "logistic_model.pkl", 'rb') as f:
                 self.logistic_model = pickle.load(f)
-            print(f"✅ 已加载逻辑回归模型")
+            print(f"[OK] Loaded logistic regression model")
 
 
 def plot_threshold_analysis(results: List[Dict], save_path: Path):
     """
-    绘制阈值分析图
+    Plot threshold analysis
     
     Args:
-        results: 包含threshold, val_r1, rerank_ratio的列表
-        save_path: 保存路径
+        results: list containing threshold, val_r1, rerank_ratio
+        save_path: save path
     """
     thresholds = [r['threshold'] for r in results]
     val_r1 = [r['val_r1'] for r in results]
@@ -414,7 +385,6 @@ def plot_threshold_analysis(results: List[Dict], save_path: Path):
     ax2.plot(thresholds, rerank_ratios, color=color, marker='s', label='Re-rank Ratio')
     ax2.tick_params(axis='y', labelcolor=color)
     
-    # 标记最优阈值
     best_idx = np.argmax(val_r1)
     best_threshold = thresholds[best_idx]
     best_r1 = val_r1[best_idx]
@@ -427,45 +397,24 @@ def plot_threshold_analysis(results: List[Dict], save_path: Path):
     save_path = Path(save_path)
     save_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    print(f"✅ 图表已保存到: {save_path}")
+    print(f"[OK] Plot saved to: {save_path}")
     plt.close()
 
 
 def main():
-    """主函数示例"""
+    """Example main function"""
     
-    # 示例用法
     print("="*80)
     print("Extension 6.1: Adaptive Re-ranking")
     print("="*80)
     
-    # 1. 硬阈值方法
-    print("\n方法1: 硬阈值")
+    print("\nMethod 1: Hard threshold")
     adaptive_threshold = AdaptiveReranking(method="threshold")
     
-    # TODO: 加载训练和验证数据
-    # train_data = adaptive_threshold.load_data(
-    #     preds_dir="logs/baseline/cosplace_l2_svox_sun",
-    #     inliers_dir="logs/inliers/cosplace_superpoint_lg_svox_sun"
-    # )
-    # val_data = adaptive_threshold.load_data(...)
-    # 
-    # # 训练
-    # threshold_results = adaptive_threshold.fit_threshold(train_data, val_data)
-    # 
-    # # 绘图
-    # plot_threshold_analysis(threshold_results, "results/threshold_analysis.png")
-    # 
-    # # 保存
-    # adaptive_threshold.save("models/adaptive_threshold")
-    
-    # 2. 逻辑回归方法
-    print("\n方法2: 逻辑回归")
+    print("\nMethod 2: Logistic regression")
     adaptive_logistic = AdaptiveReranking(method="logistic")
     
-    # TODO: 类似地训练逻辑回归模型
-    
-    print("\n✅ 完成！")
+    print("\n[OK] Done!")
 
 
 if __name__ == "__main__":

@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-分析Image Matching结果
-- 汇总所有实验的inliers统计
-- 分析inliers与VPR预测正确性的关系
-- 生成可视化和表格
-输出文件：
-results/image_matching/inliers_distribution.png - inliers分布图
-results/image_matching/discrimination_ratio.png - 区分度比率图
-results/image_matching/table.tex - LaTeX表格
-执行：
-用于 Section 5.2 报告：使用 --exclude-val（48个实验）
-用于完整分析或 Extension 6.1：使用 --include-all 或直接运行（60个实验）
-
-
+Analyze Image Matching results
+- Summarize inlier statistics for all experiments
+- Analyze correlation between inliers and VPR prediction correctness
+- Generate visualizations and tables
+Output files:
+results/image_matching/inliers_distribution.png - inlier distribution plot
+results/image_matching/discrimination_ratio.png - discrimination ratio plot
+results/image_matching/table.tex - LaTeX table
+Usage:
+For Section 5.2 report: use --exclude-val (48 experiments)
+For full analysis or Extension 6.1: use --include-all or run directly (60 experiments)
 """
 
 import json
@@ -26,11 +24,11 @@ from collections import defaultdict
 
 
 def load_all_results(results_dir="results/image_matching", exclude_val=False):
-    """加载所有Image Matching结果
+    """Load all Image Matching results
     
     Args:
-        results_dir: 结果目录路径
-        exclude_val: 如果为True，排除sfxs_val数据集（只分析test数据集，用于Section 5.2）
+        results_dir: results directory path
+        exclude_val: if True, exclude sfxs_val dataset (analyze only test datasets, for Section 5.2)
     """
     results_dir = Path(results_dir)
     
@@ -41,14 +39,14 @@ def load_all_results(results_dir="results/image_matching", exclude_val=False):
     all_results = {}
     result_files = list(results_dir.glob("*.json"))
     
-    # 过滤掉summary文件
+    # Filter out summary files
     result_files = [f for f in result_files if 'summary' not in f.name]
     
     original_count = len(result_files)
     
-    # 如果exclude_val为True，排除sfxs_val数据集
+    # If exclude_val is True, exclude sfxs_val dataset
     if exclude_val:
-        # 检查哪些文件包含sfxs_val（调试信息）
+        # Check which files contain sfxs_val (debug info)
         val_files = [f for f in result_files if 'sfxs_val' in f.name]
         if val_files:
             print(f"[DEBUG] Found {len(val_files)} files with 'sfxs_val' in name:")
@@ -59,28 +57,27 @@ def load_all_results(results_dir="results/image_matching", exclude_val=False):
         else:
             print(f"[DEBUG] No files with 'sfxs_val' found (all files are test datasets)")
         
-        # 执行过滤
         result_files = [f for f in result_files if 'sfxs_val' not in f.name]
         excluded_count = original_count - len(result_files)
         if excluded_count > 0:
-            print(f"[INFO] ✅ Excluding {excluded_count} sfxs_val files (Section 5.2 analysis)")
+            print(f"[INFO] Excluding {excluded_count} sfxs_val files (Section 5.2 analysis)")
             print(f"[INFO] Original files: {original_count}, After filtering: {len(result_files)}")
         else:
-            print(f"[INFO] ⚠️  No sfxs_val files to exclude (all {original_count} files are test datasets)")
+            print(f"[INFO] No sfxs_val files to exclude (all {original_count} files are test datasets)")
     
     print(f"Found {len(result_files)} result files")
     print(f"\nChecking each file...")
     print(f"{'='*80}")
     
     for result_file in result_files:
-        # 解析文件名: matcher_vpr_distance_dataset.json
-        # 例如: superglue_megaloc_dot_product_sf_xs_test.json
+        # Parse filename: matcher_vpr_distance_dataset.json
+        # Example: superglue_megaloc_dot_product_sf_xs_test.json
         parts = result_file.stem.split('_')
         
         if len(parts) >= 4:
             matcher = parts[0]
             vpr_method = parts[1]
-            # distance可能是dot_product (2个词) 或 l2 (1个词)
+            # distance could be dot_product (2 words) or l2 (1 word)
             if parts[2] == 'dot':
                 distance = 'dot_product'
                 dataset = '_'.join(parts[4:])
@@ -88,28 +85,25 @@ def load_all_results(results_dir="results/image_matching", exclude_val=False):
                 distance = parts[2]
                 dataset = '_'.join(parts[3:])
             
-            # 尝试加载JSON文件
-            print(f"\n📄 File: {result_file.name}")
+            print(f"\nFile: {result_file.name}")
             try:
                 with open(result_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 
-                # 验证数据结构
                 if 'results' not in data or 'analysis' not in data:
                     raise ValueError("Missing required keys: 'results' or 'analysis'")
                 
                 key = (matcher, vpr_method, dataset)
                 all_results[key] = data
-                print(f"  ✅ [OK] Successfully loaded")
+                print(f"  [OK] Successfully loaded")
                 
             except json.JSONDecodeError as e:
-                print(f"  ❌ [ERROR] JSON decode error!")
+                print(f"  [ERROR] JSON decode error!")
                 print(f"     Error: {e}")
                 print(f"     File: {result_file}")
                 print(f"     Line: {e.lineno if hasattr(e, 'lineno') else 'unknown'}, Column: {e.colno if hasattr(e, 'colno') else 'unknown'}")
-                print(f"  🔧 [INFO] Attempting to recover from pickle file...")
+                print(f"  [INFO] Attempting to recover from pickle file...")
                 
-                # 尝试从pickle文件恢复
                 pkl_file = result_file.with_suffix('.pkl')
                 if pkl_file.exists():
                     print(f"     Found pickle: {pkl_file.name}")
@@ -117,15 +111,12 @@ def load_all_results(results_dir="results/image_matching", exclude_val=False):
                         with open(pkl_file, 'rb') as f:
                             pkl_data = pickle.load(f)
                         
-                        # 转换为JSON格式
                         data = {
                             'results': pkl_data['results'],
                             'analysis': pkl_data['analysis']
                         }
                         
-                        # 尝试重新保存为JSON
                         try:
-                            # 备份原文件
                             backup_file = result_file.with_suffix('.json.bak')
                             if result_file.exists():
                                 import shutil
@@ -134,30 +125,26 @@ def load_all_results(results_dir="results/image_matching", exclude_val=False):
                             
                             with open(result_file, 'w', encoding='utf-8') as f:
                                 json.dump(data, f, indent=2, ensure_ascii=False)
-                            print(f"  ✅ [RECOVERED] Successfully recovered and saved!")
+                            print(f"  [OK] Successfully recovered and saved!")
                             
                             key = (matcher, vpr_method, dataset)
                             all_results[key] = data
                         except Exception as save_error:
-                            print(f"  ⚠️  [WARN] Could not save recovered JSON: {save_error}")
+                            print(f"  [WARN] Could not save recovered JSON: {save_error}")
                             print(f"     Using pickle data directly...")
-                            # 使用pickle数据，但需要转换格式
                             key = (matcher, vpr_method, dataset)
                             all_results[key] = data
                     except Exception as pkl_error:
-                        print(f"  ❌ [ERROR] Failed to load pickle: {pkl_error}")
-                        print(f"  ⏭️  [SKIP] Skipping {result_file.name}")
+                        print(f"  [ERROR] Failed to load pickle: {pkl_error}")
+                        print(f"  [SKIP] Skipping {result_file.name}")
                 else:
-                    # 尝试查找pickle文件（可能文件名不完全匹配）
-                    print(f"  🔍 [INFO] Checking for pickle file: {pkl_file.name}")
+                    print(f"  [INFO] Checking for pickle file: {pkl_file.name}")
                     print(f"     Expected path: {pkl_file}")
                     
-                    # 检查同一目录下是否有类似的pickle文件
                     pkl_dir = pkl_file.parent
                     all_pkl_files = list(pkl_dir.glob("*.pkl"))
                     matching_pkl = None
                     
-                    # 尝试匹配文件名（去掉扩展名后比较）
                     json_stem = result_file.stem
                     for pkl in all_pkl_files:
                         if pkl.stem == json_stem:
@@ -165,9 +152,8 @@ def load_all_results(results_dir="results/image_matching", exclude_val=False):
                             break
                     
                     if matching_pkl and matching_pkl.exists():
-                        print(f"  ✅ [FOUND] Found matching pickle: {matching_pkl.name}")
+                        print(f"  [OK] Found matching pickle: {matching_pkl.name}")
                         pkl_file = matching_pkl
-                        # 重新尝试加载
                         try:
                             with open(pkl_file, 'rb') as f:
                                 pkl_data = pickle.load(f)
@@ -177,7 +163,6 @@ def load_all_results(results_dir="results/image_matching", exclude_val=False):
                                 'analysis': pkl_data['analysis']
                             }
                             
-                            # 备份并保存
                             backup_file = result_file.with_suffix('.json.bak')
                             if result_file.exists():
                                 import shutil
@@ -186,50 +171,50 @@ def load_all_results(results_dir="results/image_matching", exclude_val=False):
                             
                             with open(result_file, 'w', encoding='utf-8') as f:
                                 json.dump(data, f, indent=2, ensure_ascii=False)
-                            print(f"  ✅ [RECOVERED] Successfully recovered and saved!")
+                            print(f"  [OK] Successfully recovered and saved!")
                             
                             key = (matcher, vpr_method, dataset)
                             all_results[key] = data
                         except Exception as recover_error:
-                            print(f"  ❌ [ERROR] Failed to recover from {matching_pkl.name}: {recover_error}")
-                            print(f"  ⏭️  [SKIP] Skipping {result_file.name}")
+                            print(f"  [ERROR] Failed to recover from {matching_pkl.name}: {recover_error}")
+                            print(f"  [SKIP] Skipping {result_file.name}")
                     else:
-                        print(f"  ❌ [ERROR] No pickle file found")
+                        print(f"  [ERROR] No pickle file found")
                         if all_pkl_files:
                             print(f"     Available pickle files in directory:")
-                            for pkl in all_pkl_files[:5]:  # 只显示前5个
+                            for pkl in all_pkl_files[:5]:
                                 print(f"       - {pkl.name}")
                             if len(all_pkl_files) > 5:
                                 print(f"       ... and {len(all_pkl_files) - 5} more")
-                        print(f"  ⏭️  [SKIP] Cannot recover, skipping {result_file.name}")
+                        print(f"  [SKIP] Cannot recover, skipping {result_file.name}")
                     
             except Exception as e:
-                print(f"  ❌ [ERROR] Failed to load {result_file.name}")
+                print(f"  [ERROR] Failed to load {result_file.name}")
                 print(f"     Error type: {type(e).__name__}")
                 print(f"     Error message: {e}")
-                print(f"  ⏭️  [SKIP] Skipping this file")
+                print(f"  [SKIP] Skipping this file")
         else:
-            print(f"  ⚠️  [WARN] Cannot parse filename: {result_file.name}")
+            print(f"  [WARN] Cannot parse filename: {result_file.name}")
     
     print(f"\n{'='*80}")
     print(f"Summary: Loaded {len(all_results)}/{len(result_files)} experiments")
     if len(all_results) < len(result_files):
-        print(f"⚠️  {len(result_files) - len(all_results)} file(s) were skipped due to errors")
+        print(f"[WARN] {len(result_files) - len(all_results)} file(s) were skipped due to errors")
     print(f"{'='*80}\n")
     return all_results
 
 
 def print_inliers_summary(all_results):
-    """打印inliers统计摘要"""
+    """Print inlier statistics summary"""
     print(f"\n{'='*100}")
     print("Inliers vs Prediction Correctness - Summary")
     print(f"{'='*100}\n")
     
-    # 表头
+    # Table header
     print(f"{'Matcher':<15} {'VPR Method':<12} {'Dataset':<20} {'Correct (mean)':<15} {'Incorrect (mean)':<17} {'Ratio':<10}")
     print('-'*100)
     
-    # 按matcher分组
+    # Group by matcher
     for (matcher, vpr_method, dataset), data in sorted(all_results.items()):
         analysis = data['analysis']
         
@@ -243,7 +228,7 @@ def print_inliers_summary(all_results):
 
 
 def analyze_by_matcher(all_results):
-    """按Image Matching方法分析"""
+    """Analyze by Image Matching method"""
     print(f"\n{'='*80}")
     print("Analysis by Image Matching Method")
     print(f"{'='*80}\n")
@@ -279,7 +264,7 @@ def analyze_by_matcher(all_results):
 
 
 def analyze_by_vpr_method(all_results):
-    """按VPR方法分析"""
+    """Analyze by VPR method"""
     print(f"\n{'='*80}")
     print("Analysis by VPR Method")
     print(f"{'='*80}\n")
@@ -306,7 +291,7 @@ def analyze_by_vpr_method(all_results):
 
 
 def create_visualization(all_results, output_dir="results/image_matching"):
-    """创建可视化图表"""
+    """Create visualization plots"""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
@@ -314,7 +299,6 @@ def create_visualization(all_results, output_dir="results/image_matching"):
     print("Creating Visualizations")
     print(f"{'='*80}\n")
     
-    # 1. Inliers分布对比图（正确 vs 错误预测）
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
     fig.suptitle('Inliers Distribution: Correct vs Incorrect Predictions', fontsize=16)
     
@@ -326,7 +310,6 @@ def create_visualization(all_results, output_dir="results/image_matching"):
         
         ax = axes.flat[idx]
         
-        # 收集该matcher的所有数据
         correct_inliers = []
         incorrect_inliers = []
         
@@ -339,7 +322,6 @@ def create_visualization(all_results, output_dir="results/image_matching"):
                 correct_inliers.extend(num_inliers[is_correct])
                 incorrect_inliers.extend(num_inliers[~is_correct])
         
-        # 绘制直方图
         if correct_inliers and incorrect_inliers:
             ax.hist(correct_inliers, bins=50, alpha=0.6, label='Correct', color='green', density=True)
             ax.hist(incorrect_inliers, bins=50, alpha=0.6, label='Incorrect', color='red', density=True)
@@ -355,7 +337,6 @@ def create_visualization(all_results, output_dir="results/image_matching"):
     print(f"[SAVED] Visualization: {viz_path}")
     plt.close()
     
-    # 2. Ratio对比图
     fig, ax = plt.subplots(figsize=(12, 6))
     
     matchers_list = []
@@ -369,7 +350,6 @@ def create_visualization(all_results, output_dir="results/image_matching"):
             vpr_methods_list.append(f"{vpr_method}")
             ratios_list.append(analysis['ratio'])
     
-    # 按matcher分组
     unique_matchers = list(set(matchers_list))
     x = np.arange(len(unique_matchers))
     
@@ -389,7 +369,6 @@ def create_visualization(all_results, output_dir="results/image_matching"):
     ax.legend()
     ax.grid(True, alpha=0.3, axis='y')
     
-    # 添加数值标签
     for bar, ratio in zip(bars, avg_ratios):
         height = bar.get_height()
         ax.text(bar.get_x() + bar.get_width()/2., height,
@@ -404,7 +383,7 @@ def create_visualization(all_results, output_dir="results/image_matching"):
 
 
 def generate_latex_table(all_results, output_path="results/image_matching/table.tex"):
-    """生成LaTeX表格"""
+    """Generate LaTeX table"""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
@@ -440,31 +419,29 @@ def generate_latex_table(all_results, output_path="results/image_matching/table.
 def main():
     import argparse
     
-    parser = argparse.ArgumentParser(description="分析Image Matching结果")
+    parser = argparse.ArgumentParser(description="Analyze Image Matching results")
     parser.add_argument(
         '--results-dir',
         type=str,
         default='results/image_matching',
-        help='结果文件目录路径（默认: results/image_matching）'
+        help='Results directory path (default: results/image_matching)'
     )
     parser.add_argument(
         '--exclude-val',
         action='store_true',
-        help='排除sfxs_val数据集，只分析test数据集（用于Section 5.2，48个实验）'
+        help='Exclude sfxs_val dataset, analyze only test datasets (for Section 5.2, 48 experiments)'
     )
     parser.add_argument(
         '--include-all',
         action='store_true',
-        help='分析所有文件（包括sfxs_val，60个实验）'
+        help='Analyze all files (including sfxs_val, 60 experiments)'
     )
     args = parser.parse_args()
     
-    # 确定是否排除val数据集
     exclude_val = args.exclude_val
     if args.include_all:
         exclude_val = False
     
-    # 调试信息：显示参数值
     print(f"\n{'='*80}")
     print("Image Matching Results Analysis")
     print(f"Results directory: {args.results_dir}")
@@ -477,7 +454,6 @@ def main():
         print("Mode: All datasets (including sfxs_val)")
     print(f"{'='*80}\n")
     
-    # 1. 加载所有结果
     all_results = load_all_results(results_dir=args.results_dir, exclude_val=exclude_val)
     
     if not all_results:
@@ -486,18 +462,14 @@ def main():
     
     print(f"\n[INFO] Loaded {len(all_results)} experiments for analysis")
     
-    # 2. 打印摘要
     print_inliers_summary(all_results)
     
-    # 3. 按方法分析
     analyze_by_matcher(all_results)
     analyze_by_vpr_method(all_results)
     
-    # 4. 创建可视化（输出到结果目录）
     output_dir = Path(args.results_dir)
     create_visualization(all_results, output_dir=str(output_dir))
     
-    # 5. 生成LaTeX表格（输出到结果目录）
     table_path = output_dir / "table.tex"
     generate_latex_table(all_results, output_path=str(table_path))
     
