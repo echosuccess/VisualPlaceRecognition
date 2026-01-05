@@ -212,6 +212,13 @@ class Extension61Pipeline:
         print("步骤4：训练硬阈值模型")
         print("="*80)
         
+        # 确保data_splits已初始化
+        if not hasattr(self, 'data_splits'):
+            print("[INFO] data_splits未初始化，重新执行step3_prepare_data...")
+            if not self.step3_prepare_data():
+                print("[ERROR] 准备数据失败")
+                return False
+        
         for vpr_method in self.config['vpr_methods']:
             for im_method in self.config['im_methods']:
                 
@@ -277,6 +284,13 @@ class Extension61Pipeline:
         print("步骤5：训练逻辑回归模型")
         print("="*80)
         
+        # 确保data_splits已初始化
+        if not hasattr(self, 'data_splits'):
+            print("[INFO] data_splits未初始化，重新执行step3_prepare_data...")
+            if not self.step3_prepare_data():
+                print("[ERROR] 准备数据失败")
+                return False
+        
         for vpr_method in self.config['vpr_methods']:
             for im_method in self.config['im_methods']:
                 
@@ -335,6 +349,13 @@ class Extension61Pipeline:
         print("\n" + "="*80)
         print("步骤6：在测试集上评估")
         print("="*80)
+        
+        # 确保data_splits已初始化
+        if not hasattr(self, 'data_splits'):
+            print("[INFO] data_splits未初始化，重新执行step3_prepare_data...")
+            if not self.step3_prepare_data():
+                print("[ERROR] 准备数据失败")
+                return False
         
         test_results = []
         
