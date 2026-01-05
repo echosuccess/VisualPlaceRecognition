@@ -442,6 +442,12 @@ def main():
     
     parser = argparse.ArgumentParser(description="分析Image Matching结果")
     parser.add_argument(
+        '--results-dir',
+        type=str,
+        default='results/image_matching',
+        help='结果文件目录路径（默认: results/image_matching）'
+    )
+    parser.add_argument(
         '--exclude-val',
         action='store_true',
         help='排除sfxs_val数据集，只分析test数据集（用于Section 5.2，48个实验）'
@@ -458,8 +464,13 @@ def main():
     if args.include_all:
         exclude_val = False
     
+    # 调试信息：显示参数值
     print(f"\n{'='*80}")
     print("Image Matching Results Analysis")
+    print(f"Results directory: {args.results_dir}")
+    print(f"[DEBUG] args.exclude_val = {args.exclude_val}")
+    print(f"[DEBUG] args.include_all = {args.include_all}")
+    print(f"[DEBUG] Final exclude_val = {exclude_val}")
     if exclude_val:
         print("Mode: Section 5.2 (Test datasets only, excluding sfxs_val)")
     else:
@@ -467,7 +478,7 @@ def main():
     print(f"{'='*80}\n")
     
     # 1. 加载所有结果
-    all_results = load_all_results(exclude_val=exclude_val)
+    all_results = load_all_results(results_dir=args.results_dir, exclude_val=exclude_val)
     
     if not all_results:
         print("[ERROR] No results found!")
@@ -482,19 +493,21 @@ def main():
     analyze_by_matcher(all_results)
     analyze_by_vpr_method(all_results)
     
-    # 4. 创建可视化
-    create_visualization(all_results)
+    # 4. 创建可视化（输出到结果目录）
+    output_dir = Path(args.results_dir)
+    create_visualization(all_results, output_dir=str(output_dir))
     
-    # 5. 生成LaTeX表格
-    generate_latex_table(all_results)
+    # 5. 生成LaTeX表格（输出到结果目录）
+    table_path = output_dir / "table.tex"
+    generate_latex_table(all_results, output_path=str(table_path))
     
     print(f"\n{'='*80}")
     print("Analysis Complete!")
     print(f"{'='*80}\n")
     print("Generated files:")
-    print("  - results/image_matching/inliers_distribution.png")
-    print("  - results/image_matching/discrimination_ratio.png")
-    print("  - results/image_matching/table.tex")
+    print(f"  - {output_dir / 'inliers_distribution.png'}")
+    print(f"  - {output_dir / 'discrimination_ratio.png'}")
+    print(f"  - {table_path}")
     print("\nNext steps:")
     print("  1. Review the visualizations and tables")
     print("  2. Write conclusions about inliers vs prediction correctness")
