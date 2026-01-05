@@ -5,6 +5,15 @@
 - 汇总所有实验的inliers统计
 - 分析inliers与VPR预测正确性的关系
 - 生成可视化和表格
+输出文件：
+results/image_matching/inliers_distribution.png - inliers分布图
+results/image_matching/discrimination_ratio.png - 区分度比率图
+results/image_matching/table.tex - LaTeX表格
+执行：
+用于 Section 5.2 报告：使用 --exclude-val（48个实验）
+用于完整分析或 Extension 6.1：使用 --include-all 或直接运行（60个实验）
+
+
 """
 
 import json
@@ -35,13 +44,29 @@ def load_all_results(results_dir="results/image_matching", exclude_val=False):
     # 过滤掉summary文件
     result_files = [f for f in result_files if 'summary' not in f.name]
     
+    original_count = len(result_files)
+    
     # 如果exclude_val为True，排除sfxs_val数据集
     if exclude_val:
-        original_count = len(result_files)
+        # 检查哪些文件包含sfxs_val（调试信息）
+        val_files = [f for f in result_files if 'sfxs_val' in f.name]
+        if val_files:
+            print(f"[DEBUG] Found {len(val_files)} files with 'sfxs_val' in name:")
+            for vf in val_files[:3]:
+                print(f"  - {vf.name}")
+            if len(val_files) > 3:
+                print(f"  ... and {len(val_files) - 3} more")
+        else:
+            print(f"[DEBUG] No files with 'sfxs_val' found (all files are test datasets)")
+        
+        # 执行过滤
         result_files = [f for f in result_files if 'sfxs_val' not in f.name]
         excluded_count = original_count - len(result_files)
         if excluded_count > 0:
-            print(f"[INFO] Excluding {excluded_count} sfxs_val files (Section 5.2 analysis)")
+            print(f"[INFO] ✅ Excluding {excluded_count} sfxs_val files (Section 5.2 analysis)")
+            print(f"[INFO] Original files: {original_count}, After filtering: {len(result_files)}")
+        else:
+            print(f"[INFO] ⚠️  No sfxs_val files to exclude (all {original_count} files are test datasets)")
     
     print(f"Found {len(result_files)} result files")
     print(f"\nChecking each file...")
