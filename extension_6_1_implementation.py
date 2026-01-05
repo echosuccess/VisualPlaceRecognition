@@ -56,25 +56,34 @@ class AdaptiveReranking:
             with open(im_result_json, 'r', encoding='utf-8') as f:
                 im_data = json.load(f)
             
-            # 从JSON提取inliers（只取top-1，即pred_rank=0的）
+            # 从JSON提取inliers（所有top-K预测的inliers，用于re-ranking）
             num_inliers = im_data['results']['num_inliers']
             pred_ranks = im_data['results']['pred_ranks']
+            query_ids = im_data['results']['query_ids']
             is_correct_json = im_data['results']['is_correct']
             
-            # 只取top-1预测的inliers（pred_rank=0）
+            # 构建每个查询的top-K inliers矩阵
+            num_queries = len(predictions)
+            top_k = predictions.shape[1] if len(predictions.shape) > 1 else 1
+            
+            # 初始化inliers矩阵：每个查询的top-K预测的inliers
+            inliers_matrix = np.zeros((num_queries, top_k), dtype=np.float64)
             top1_inliers = []
             top1_is_correct = []
-            current_query_idx = None
             
-            for i, (inlier_count, rank, correct) in enumerate(zip(num_inliers, pred_ranks, is_correct_json)):
-                # 假设query_ids是连续的，从0开始
-                # 如果pred_rank=0，说明这是top-1预测
-                if rank == 0:
-                    top1_inliers.append(inlier_count)
-                    top1_is_correct.append(correct)
+            # 按query_id和pred_rank组织数据
+            for i, (q_idx, rank, inlier_count, correct) in enumerate(zip(query_ids, pred_ranks, num_inliers, is_correct_json)):
+                if q_idx < num_queries and rank < top_k:
+                    inliers_matrix[q_idx, rank] = inlier_count
+                    if rank == 0:  # top-1预测
+                        top1_inliers.append(inlier_count)
+                        top1_is_correct.append(correct)
             
             inliers = np.array(top1_inliers, dtype=np.float64)
             is_correct = np.array(top1_is_correct, dtype=bool)
+            
+            # 存储完整的inliers矩阵用于re-ranking
+            self.inliers_matrix = inliers_matrix
             
         # 兼容旧格式：从inliers.npy加载
         elif inliers_dir and Path(inliers_dir).exists():
@@ -88,6 +97,12 @@ class AdaptiveReranking:
                 top1_pred = pred_indices[0]
                 is_correct.append(top1_pred in positives_per_query[q_idx])
             is_correct = np.array(is_correct, dtype=bool)
+            
+            # 旧格式没有完整的inliers矩阵，使用top-1 inliers作为近似
+            top_k = predictions.shape[1] if len(predictions.shape) > 1 else 1
+            inliers_matrix = np.zeros((len(predictions), top_k), dtype=np.float64)
+            inliers_matrix[:, 0] = inliers
+            self.inliers_matrix = inliers_matrix
         else:
             raise FileNotFoundError(f"Neither JSON file nor inliers.npy found. JSON: {im_result_json}, inliers_dir: {inliers_dir}")
         
@@ -100,6 +115,8 @@ class AdaptiveReranking:
             positives_per_query = positives_per_query[:min_len]
             if len(is_correct) != min_len:
                 is_correct = is_correct[:min_len]
+            if hasattr(self, 'inliers_matrix'):
+                self.inliers_matrix = self.inliers_matrix[:min_len]
         
         return {
             'inliers': inliers,
@@ -153,7 +170,7 @@ class AdaptiveReranking:
     
     def _evaluate_threshold(self, threshold: float, data: Dict) -> Tuple[float, float]:
         """
-        评估给定阈值的性能
+        评估给定阈值的性能（实际执行re-ranking）
         
         Returns:
             (R@1得分, re-ranking比例)
@@ -166,12 +183,20 @@ class AdaptiveReranking:
         need_rerank = inliers < threshold
         rerank_ratio = np.mean(need_rerank)
         
-        # 计算R@1（假设re-ranking能完美修正错误的查询）
-        # 注意：这里需要实际的re-ranking结果，这是简化版本
-        # 实际实现需要读取re-ranking后的结果
+        # 实际执行re-ranking：对需要rerank的查询，基于inliers重新排序
         correct_count = 0
         for q_idx, pred_indices in enumerate(predictions):
-            top1_pred = pred_indices[0]
+            if need_rerank[q_idx] and hasattr(self, 'inliers_matrix'):
+                # 需要rerank：基于inliers重新排序top-K预测
+                query_inliers = self.inliers_matrix[q_idx, :len(pred_indices)]
+                # 按inliers降序排序
+                sorted_indices = np.argsort(query_inliers)[::-1]
+                reranked_preds = pred_indices[sorted_indices]
+                top1_pred = reranked_preds[0]
+            else:
+                # 不需要rerank：使用原始top-1预测
+                top1_pred = pred_indices[0]
+            
             is_correct = top1_pred in positives_per_query[q_idx]
             correct_count += int(is_correct)
         
@@ -279,11 +304,11 @@ class AdaptiveReranking:
     
     def evaluate(self, data: Dict, reranked_results: Dict = None) -> Dict:
         """
-        评估自适应re-ranking策略
+        评估自适应re-ranking策略（实际执行re-ranking）
         
         Args:
             data: 包含inliers和predictions的字典
-            reranked_results: re-ranking后的结果（如果有）
+            reranked_results: re-ranking后的结果（如果有，未使用）
         
         Returns:
             评估指标字典
@@ -291,23 +316,40 @@ class AdaptiveReranking:
         need_rerank = self.predict_need_rerank(data)
         rerank_ratio = np.mean(need_rerank)
         
-        # 计算R@1
+        # 计算原始R@1（不rerank）
         predictions = data['predictions']
         positives_per_query = data['positives_per_query']
         
-        correct_count = 0
+        correct_count_without = 0
         for q_idx, pred_indices in enumerate(predictions):
             top1_pred = pred_indices[0]
             is_correct = top1_pred in positives_per_query[q_idx]
-            correct_count += int(is_correct)
+            correct_count_without += int(is_correct)
         
-        r1_without_rerank = correct_count / len(predictions)
+        r1_without_rerank = correct_count_without / len(predictions)
         
-        # TODO: 如果有re-ranking结果，计算re-ranking后的R@1
-        # 这需要实际的re-ranking代码
+        # 计算rerank后的R@1（实际执行re-ranking）
+        correct_count_with = 0
+        for q_idx, pred_indices in enumerate(predictions):
+            if need_rerank[q_idx] and hasattr(self, 'inliers_matrix'):
+                # 需要rerank：基于inliers重新排序top-K预测
+                query_inliers = self.inliers_matrix[q_idx, :len(pred_indices)]
+                # 按inliers降序排序
+                sorted_indices = np.argsort(query_inliers)[::-1]
+                reranked_preds = pred_indices[sorted_indices]
+                top1_pred = reranked_preds[0]
+            else:
+                # 不需要rerank：使用原始top-1预测
+                top1_pred = pred_indices[0]
+            
+            is_correct = top1_pred in positives_per_query[q_idx]
+            correct_count_with += int(is_correct)
+        
+        r1_with_rerank = correct_count_with / len(predictions)
         
         return {
             'r1_without_rerank': r1_without_rerank,
+            'r1_with_rerank': r1_with_rerank,
             'rerank_ratio': rerank_ratio,
             'num_rerank': int(np.sum(need_rerank)),
             'total_queries': len(predictions),

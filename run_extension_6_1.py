@@ -394,7 +394,11 @@ class Extension61Pipeline:
                 })
                 
                 print(f"  {test_data_info['dataset']}:")
-                print(f"    R@1: {eval_results['r1_without_rerank']:.2%}")
+                print(f"    R@1 (无rerank): {eval_results['r1_without_rerank']:.2%}")
+                if 'r1_with_rerank' in eval_results:
+                    print(f"    R@1 (有rerank): {eval_results['r1_with_rerank']:.2%}")
+                    improvement = eval_results['r1_with_rerank'] - eval_results['r1_without_rerank']
+                    print(f"    提升: {improvement:+.2%}")
                 print(f"    Re-rank比例: {eval_results['rerank_ratio']:.2%}")
                 print(f"    成本节省: {eval_results['cost_saving']:.2%}")
         
