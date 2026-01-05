@@ -68,19 +68,20 @@ class AdaptiveReranking:
             
             # 初始化inliers矩阵：每个查询的top-K预测的inliers
             inliers_matrix = np.zeros((num_queries, top_k), dtype=np.float64)
-            top1_inliers = []
-            top1_is_correct = []
+            top1_inliers = np.zeros(num_queries, dtype=np.float64)
+            top1_is_correct = np.zeros(num_queries, dtype=bool)
             
             # 按query_id和pred_rank组织数据
             for i, (q_idx, rank, inlier_count, correct) in enumerate(zip(query_ids, pred_ranks, num_inliers, is_correct_json)):
                 if q_idx < num_queries and rank < top_k:
                     inliers_matrix[q_idx, rank] = inlier_count
                     if rank == 0:  # top-1预测
-                        top1_inliers.append(inlier_count)
-                        top1_is_correct.append(correct)
+                        top1_inliers[q_idx] = inlier_count
+                        top1_is_correct[q_idx] = correct
             
-            inliers = np.array(top1_inliers, dtype=np.float64)
-            is_correct = np.array(top1_is_correct, dtype=bool)
+            # 转换为数组（保持与predictions长度一致）
+            inliers = top1_inliers
+            is_correct = top1_is_correct
             
             # 存储完整的inliers矩阵用于re-ranking
             self.inliers_matrix = inliers_matrix
