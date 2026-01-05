@@ -45,7 +45,7 @@ class AdaptiveReranking:
         """
         # 加载VPR预测数据
         z_data_path = list(Path(preds_dir).glob("**/z_data.torch"))[0]
-        z_data = torch.load(z_data_path)
+        z_data = torch.load(z_data_path, map_location='cpu', weights_only=False)
         
         predictions = z_data['predictions']
         positives_per_query = z_data['positives_per_query']
