@@ -1,0 +1,27 @@
+{
+  "total": 3,
+  "success": 0,
+  "fail": 0,
+  "skip": 3,
+  "time_minutes": 1.3693173726399739e-05,
+  "experiments": [
+    {
+      "matcher": "superglue",
+      "vpr_method": "megaloc",
+      "dataset": "sf_xs_test",
+      "distance": "dot_product"
+    },
+    {
+      "matcher": "loftr",
+      "vpr_method": "megaloc",
+      "dataset": "sf_xs_test",
+      "distance": "dot_product"
+    },
+    {
+      "matcher": "superpoint-lg",
+      "vpr_method": "megaloc",
+      "dataset": "sf_xs_test",
+      "distance": "dot_product"
+    }
+  ]
+}
