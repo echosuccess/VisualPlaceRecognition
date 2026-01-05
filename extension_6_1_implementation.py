@@ -34,37 +34,76 @@ class AdaptiveReranking:
         self.threshold = None
         self.logistic_model = None
         
-    def load_data(self, preds_dir: Path, inliers_dir: Path):
+    def load_data(self, preds_dir: Path, im_result_json: Path = None, inliers_dir: Path = None):
         """
         加载VPR预测和inliers数据
         
         Args:
             preds_dir: VPR预测结果目录（包含z_data.torch）
-            inliers_dir: Image Matching结果目录（包含inliers数据）
+            im_result_json: Image Matching JSON结果文件路径（新格式，优先使用）
+            inliers_dir: Image Matching结果目录（包含inliers.npy，旧格式，兼容用）
         """
         # 加载VPR预测数据
         z_data_path = list(Path(preds_dir).glob("**/z_data.torch"))[0]
         z_data = torch.load(z_data_path)
         
-        # 加载inliers数据
-        inliers_path = list(Path(inliers_dir).glob("**/inliers.npy"))[0]
-        inliers = np.load(inliers_path)
-        
-        # 计算ground truth标签
         predictions = z_data['predictions']
         positives_per_query = z_data['positives_per_query']
         database_utms = z_data['database_utms']
         
-        # 对于每个查询，判断R@1是否正确
-        is_correct = []
-        for q_idx, pred_indices in enumerate(predictions):
-            # 检查top-1预测是否正确
-            top1_pred = pred_indices[0]
-            is_correct.append(top1_pred in positives_per_query[q_idx])
+        # 优先从JSON文件加载inliers（新格式）
+        if im_result_json and Path(im_result_json).exists():
+            with open(im_result_json, 'r', encoding='utf-8') as f:
+                im_data = json.load(f)
+            
+            # 从JSON提取inliers（只取top-1，即pred_rank=0的）
+            num_inliers = im_data['results']['num_inliers']
+            pred_ranks = im_data['results']['pred_ranks']
+            is_correct_json = im_data['results']['is_correct']
+            
+            # 只取top-1预测的inliers（pred_rank=0）
+            top1_inliers = []
+            top1_is_correct = []
+            current_query_idx = None
+            
+            for i, (inlier_count, rank, correct) in enumerate(zip(num_inliers, pred_ranks, is_correct_json)):
+                # 假设query_ids是连续的，从0开始
+                # 如果pred_rank=0，说明这是top-1预测
+                if rank == 0:
+                    top1_inliers.append(inlier_count)
+                    top1_is_correct.append(correct)
+            
+            inliers = np.array(top1_inliers, dtype=np.float64)
+            is_correct = np.array(top1_is_correct, dtype=bool)
+            
+        # 兼容旧格式：从inliers.npy加载
+        elif inliers_dir and Path(inliers_dir).exists():
+            inliers_path = list(Path(inliers_dir).glob("**/inliers.npy"))[0]
+            inliers_array = np.load(inliers_path)
+            inliers = inliers_array[:, 0]  # 只使用第一个预测的inliers
+            
+            # 计算ground truth标签
+            is_correct = []
+            for q_idx, pred_indices in enumerate(predictions):
+                top1_pred = pred_indices[0]
+                is_correct.append(top1_pred in positives_per_query[q_idx])
+            is_correct = np.array(is_correct, dtype=bool)
+        else:
+            raise FileNotFoundError(f"Neither JSON file nor inliers.npy found. JSON: {im_result_json}, inliers_dir: {inliers_dir}")
+        
+        # 确保长度一致
+        if len(inliers) != len(predictions):
+            print(f"[WARN] Inliers length ({len(inliers)}) != predictions length ({len(predictions)}). Truncating...")
+            min_len = min(len(inliers), len(predictions))
+            inliers = inliers[:min_len]
+            predictions = predictions[:min_len]
+            positives_per_query = positives_per_query[:min_len]
+            if len(is_correct) != min_len:
+                is_correct = is_correct[:min_len]
         
         return {
-            'inliers': inliers[:, 0],  # 只使用第一个预测的inliers
-            'is_correct': np.array(is_correct),
+            'inliers': inliers,
+            'is_correct': is_correct,
             'predictions': predictions,
             'positives_per_query': positives_per_query,
             'database_utms': database_utms

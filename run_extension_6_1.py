@@ -29,21 +29,54 @@ class Extension61Pipeline:
         self.checkpoint_path = Path("checkpoints/extension_6_1.json")
         
     def step1_check_prerequisites(self):
-        """检查前置条件：VPR结果是否存在"""
+        """检查前置条件：VPR结果和Image Matching JSON文件是否存在"""
         print("\n" + "="*80)
         print("步骤1：检查前置条件")
         print("="*80)
         
+        # 数据集名称映射
+        dataset_mapping = {
+            'svox_sun': 'svox_sun_test',
+            'svox_night': 'svox_night_test',
+            'sfxs_test': 'sf_xs_test',
+            'tokyo_xs': 'tokyo_xs_test',
+            'sfxs_val': 'sfxs_val'
+        }
+        
+        # Matcher名称映射
+        matcher_mapping = {
+            'superpoint-lg': 'superpoint-lg',
+            'loftr': 'loftr',
+            'superglue': 'superglue'
+        }
+        
+        results_dir = Path("results/image_matching")
+        if not results_dir.exists():
+            results_dir = Path("mydoc/image_matching")
+        
         missing_files = []
         
         for vpr_method in self.config['vpr_methods']:
-            for dataset in self.config['datasets']:
-                # 检查VPR预测结果
-                preds_dir = Path(f"logs/baseline/{vpr_method}_l2_{dataset['name']}")
-                z_data_files = list(preds_dir.glob("**/z_data.torch"))
-                
-                if not z_data_files:
-                    missing_files.append(f"VPR预测: {preds_dir}")
+            for im_method in self.config['im_methods']:
+                for dataset in self.config['datasets']:
+                    dataset_name = dataset_mapping.get(dataset['name'], dataset['name'])
+                    matcher_name = matcher_mapping.get(im_method, im_method)
+                    
+                    # 检查VPR预测结果（可能是l2或dot_product）
+                    preds_dir_l2 = Path(f"logs/baseline/{vpr_method}_l2_{dataset_name}")
+                    preds_dir_dot = Path(f"logs/baseline/{vpr_method}_dot_product_{dataset_name}")
+                    z_data_files_l2 = list(preds_dir_l2.glob("**/z_data.torch")) if preds_dir_l2.exists() else []
+                    z_data_files_dot = list(preds_dir_dot.glob("**/z_data.torch")) if preds_dir_dot.exists() else []
+                    
+                    if not z_data_files_l2 and not z_data_files_dot:
+                        missing_files.append(f"VPR预测: {vpr_method} + {dataset_name}")
+                    
+                    # 检查Image Matching JSON文件（可能是l2或dot_product）
+                    json_file_l2 = results_dir / f"{matcher_name}_{vpr_method}_l2_{dataset_name}.json"
+                    json_file_dot = results_dir / f"{matcher_name}_{vpr_method}_dot_product_{dataset_name}.json"
+                    
+                    if not json_file_l2.exists() and not json_file_dot.exists():
+                        missing_files.append(f"Image Matching JSON: {matcher_name} + {vpr_method} + {dataset_name}")
         
         if missing_files:
             print("\n❌ 缺少以下文件，请先运行baseline实验：")
@@ -55,54 +88,39 @@ class Extension61Pipeline:
         return True
     
     def step2_run_image_matching(self):
-        """运行Image Matching获取inliers数据"""
+        """运行Image Matching获取inliers数据（已跳过，因为JSON文件已存在）"""
         print("\n" + "="*80)
         print("步骤2：运行Image Matching（如果需要）")
         print("="*80)
         
-        for vpr_method in self.config['vpr_methods']:
-            for im_method in self.config['im_methods']:
-                for dataset in self.config['datasets']:
-                    
-                    # 检查是否已经运行过
-                    inliers_dir = Path(
-                        f"logs/inliers/{vpr_method}_{im_method}_{dataset['name']}"
-                    )
-                    
-                    if (inliers_dir / "inliers.npy").exists():
-                        print(f"⏭️  跳过（已存在）: {vpr_method} + {im_method} + {dataset['name']}")
-                        continue
-                    
-                    print(f"\n🔄 运行: {vpr_method} + {im_method} + {dataset['name']}")
-                    
-                    # 构建命令
-                    preds_dir = Path(f"logs/baseline/{vpr_method}_l2_{dataset['name']}")
-                    preds_folder = list(preds_dir.glob("**/predictions"))[0]
-                    
-                    cmd = [
-                        "python", "match_queries_preds.py",
-                        "--preds-dir", str(preds_folder),
-                        "--matcher", im_method,
-                        "--device", "cuda",
-                        "--num-preds", "20",
-                        "--output-dir", str(inliers_dir)
-                    ]
-                    
-                    try:
-                        subprocess.run(cmd, check=True)
-                        print(f"✅ 完成")
-                    except subprocess.CalledProcessError as e:
-                        print(f"❌ 失败: {e}")
-                        return False
+        # 由于JSON文件已经存在，跳过此步骤
+        print("\n⏭️  跳过：Image Matching JSON文件已存在，无需重新运行")
+        print("   如果JSON文件不存在，请先运行 run_image_matching_baseline.py")
         
-        print("\n✅ Image Matching完成")
         return True
     
     def step3_prepare_data(self):
-        """准备训练/验证/测试数据"""
+        """准备训练/验证/测试数据（从JSON文件读取）"""
         print("\n" + "="*80)
         print("步骤3：准备数据")
         print("="*80)
+        
+        # 数据集名称映射（代码中使用的名称 -> 实际VPR日志和JSON文件中的名称）
+        dataset_mapping = {
+            'svox_sun': 'svox_sun_test',
+            'svox_night': 'svox_night_test',
+            'sfxs_test': 'sf_xs_test',
+            'tokyo_xs': 'tokyo_xs_test',
+            'svox_test': 'svox_sun_test',  # 注意：svox_test可能指svox_sun_test或svox_night_test
+            'sfxs_val': 'sfxs_val'
+        }
+        
+        # Matcher名称映射（代码中使用的名称 -> JSON文件中的名称）
+        matcher_mapping = {
+            'superpoint-lg': 'superpoint-lg',
+            'loftr': 'loftr',
+            'superglue': 'superglue'
+        }
         
         data_splits = {
             'train': [],
@@ -110,49 +128,75 @@ class Extension61Pipeline:
             'test': []
         }
         
+        results_dir = Path("results/image_matching")
+        if not results_dir.exists():
+            # 尝试从mydoc/image_matching读取
+            results_dir = Path("mydoc/image_matching")
+        
         for vpr_method in self.config['vpr_methods']:
             for im_method in self.config['im_methods']:
+                matcher_name = matcher_mapping.get(im_method, im_method)
                 
-                # 训练集：SVOX (排除GSV-XS)
-                for train_dataset in ['svox_sun', 'svox_night']:
-                    preds_dir = f"logs/baseline/{vpr_method}_l2_{train_dataset}"
-                    inliers_dir = f"logs/inliers/{vpr_method}_{im_method}_{train_dataset}"
+                # 训练集：SVOX (svox_sun_test, svox_night_test)
+                for train_dataset_code in ['svox_sun', 'svox_night']:
+                    train_dataset = dataset_mapping.get(train_dataset_code, train_dataset_code)
                     
-                    if Path(preds_dir).exists() and Path(inliers_dir).exists():
+                    # 查找VPR日志目录（可能是l2或dot_product）
+                    preds_dir_l2 = Path(f"logs/baseline/{vpr_method}_l2_{train_dataset}")
+                    preds_dir_dot = Path(f"logs/baseline/{vpr_method}_dot_product_{train_dataset}")
+                    preds_dir = preds_dir_l2 if preds_dir_l2.exists() else (preds_dir_dot if preds_dir_dot.exists() else None)
+                    
+                    # 查找JSON文件（可能是l2或dot_product）
+                    json_file_l2 = results_dir / f"{matcher_name}_{vpr_method}_l2_{train_dataset}.json"
+                    json_file_dot = results_dir / f"{matcher_name}_{vpr_method}_dot_product_{train_dataset}.json"
+                    json_file = json_file_l2 if json_file_l2.exists() else (json_file_dot if json_file_dot.exists() else None)
+                    
+                    if preds_dir and json_file and json_file.exists():
                         data_splits['train'].append({
                             'vpr': vpr_method,
                             'im': im_method,
-                            'dataset': train_dataset,
-                            'preds_dir': preds_dir,
-                            'inliers_dir': inliers_dir
+                            'dataset': train_dataset_code,
+                            'preds_dir': str(preds_dir),
+                            'im_result_json': str(json_file)
                         })
                 
                 # 验证集：SF-XS val
-                val_dataset = 'sfxs_val'
-                preds_dir = f"logs/baseline/{vpr_method}_l2_{val_dataset}"
-                inliers_dir = f"logs/inliers/{vpr_method}_{im_method}_{val_dataset}"
+                val_dataset_code = 'sfxs_val'
+                val_dataset = dataset_mapping.get(val_dataset_code, val_dataset_code)
                 
-                if Path(preds_dir).exists() and Path(inliers_dir).exists():
+                preds_dir_l2 = Path(f"logs/baseline/{vpr_method}_l2_{val_dataset}")
+                preds_dir = preds_dir_l2 if preds_dir_l2.exists() else None
+                
+                json_file = results_dir / f"{matcher_name}_{vpr_method}_l2_{val_dataset}.json"
+                
+                if preds_dir and json_file and json_file.exists():
                     data_splits['val'].append({
                         'vpr': vpr_method,
                         'im': im_method,
-                        'dataset': val_dataset,
-                        'preds_dir': preds_dir,
-                        'inliers_dir': inliers_dir
+                        'dataset': val_dataset_code,
+                        'preds_dir': str(preds_dir),
+                        'im_result_json': str(json_file)
                     })
                 
                 # 测试集：SF-XS test, Tokyo-XS, SVOX test
-                for test_dataset in ['sfxs_test', 'tokyo_xs', 'svox_test']:
-                    preds_dir = f"logs/baseline/{vpr_method}_l2_{test_dataset}"
-                    inliers_dir = f"logs/inliers/{vpr_method}_{im_method}_{test_dataset}"
+                for test_dataset_code in ['sfxs_test', 'tokyo_xs']:
+                    test_dataset = dataset_mapping.get(test_dataset_code, test_dataset_code)
                     
-                    if Path(preds_dir).exists() and Path(inliers_dir).exists():
+                    preds_dir_l2 = Path(f"logs/baseline/{vpr_method}_l2_{test_dataset}")
+                    preds_dir_dot = Path(f"logs/baseline/{vpr_method}_dot_product_{test_dataset}")
+                    preds_dir = preds_dir_l2 if preds_dir_l2.exists() else (preds_dir_dot if preds_dir_dot.exists() else None)
+                    
+                    json_file_l2 = results_dir / f"{matcher_name}_{vpr_method}_l2_{test_dataset}.json"
+                    json_file_dot = results_dir / f"{matcher_name}_{vpr_method}_dot_product_{test_dataset}.json"
+                    json_file = json_file_l2 if json_file_l2.exists() else (json_file_dot if json_file_dot.exists() else None)
+                    
+                    if preds_dir and json_file and json_file.exists():
                         data_splits['test'].append({
                             'vpr': vpr_method,
                             'im': im_method,
-                            'dataset': test_dataset,
-                            'preds_dir': preds_dir,
-                            'inliers_dir': inliers_dir
+                            'dataset': test_dataset_code,
+                            'preds_dir': str(preds_dir),
+                            'im_result_json': str(json_file)
                         })
         
         print(f"训练集样本数: {len(data_splits['train'])}")
@@ -201,7 +245,7 @@ class Extension61Pipeline:
                 
                 val_data = adaptive.load_data(
                     Path(val_data_list[0]['preds_dir']),
-                    Path(val_data_list[0]['inliers_dir'])
+                    im_result_json=Path(val_data_list[0]['im_result_json'])
                 )
                 
                 # 训练
@@ -265,7 +309,7 @@ class Extension61Pipeline:
                 
                 val_data = adaptive.load_data(
                     Path(val_data_list[0]['preds_dir']),
-                    Path(val_data_list[0]['inliers_dir'])
+                    im_result_json=Path(val_data_list[0]['im_result_json'])
                 )
                 
                 # 训练
@@ -315,7 +359,7 @@ class Extension61Pipeline:
             for test_data_info in test_data_list:
                 test_data = adaptive.load_data(
                     Path(test_data_info['preds_dir']),
-                    Path(test_data_info['inliers_dir'])
+                    im_result_json=Path(test_data_info['im_result_json'])
                 )
                 
                 eval_results = adaptive.evaluate(test_data)
@@ -368,7 +412,7 @@ class Extension61Pipeline:
         for data_info in data_list:
             data = adaptive.load_data(
                 Path(data_info['preds_dir']),
-                Path(data_info['inliers_dir'])
+                im_result_json=Path(data_info['im_result_json'])
             )
             all_inliers.append(data['inliers'])
             all_is_correct.append(data['is_correct'])
