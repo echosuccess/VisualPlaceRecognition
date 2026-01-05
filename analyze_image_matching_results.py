@@ -16,8 +16,13 @@ import seaborn as sns
 from collections import defaultdict
 
 
-def load_all_results(results_dir="results/image_matching"):
-    """加载所有Image Matching结果"""
+def load_all_results(results_dir="results/image_matching", exclude_val=False):
+    """加载所有Image Matching结果
+    
+    Args:
+        results_dir: 结果目录路径
+        exclude_val: 如果为True，排除sfxs_val数据集（只分析test数据集，用于Section 5.2）
+    """
     results_dir = Path(results_dir)
     
     if not results_dir.exists():
@@ -29,6 +34,14 @@ def load_all_results(results_dir="results/image_matching"):
     
     # 过滤掉summary文件
     result_files = [f for f in result_files if 'summary' not in f.name]
+    
+    # 如果exclude_val为True，排除sfxs_val数据集
+    if exclude_val:
+        original_count = len(result_files)
+        result_files = [f for f in result_files if 'sfxs_val' not in f.name]
+        excluded_count = original_count - len(result_files)
+        if excluded_count > 0:
+            print(f"[INFO] Excluding {excluded_count} sfxs_val files (Section 5.2 analysis)")
     
     print(f"Found {len(result_files)} result files")
     print(f"\nChecking each file...")
@@ -400,16 +413,42 @@ def generate_latex_table(all_results, output_path="results/image_matching/table.
 
 
 def main():
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="分析Image Matching结果")
+    parser.add_argument(
+        '--exclude-val',
+        action='store_true',
+        help='排除sfxs_val数据集，只分析test数据集（用于Section 5.2，48个实验）'
+    )
+    parser.add_argument(
+        '--include-all',
+        action='store_true',
+        help='分析所有文件（包括sfxs_val，60个实验）'
+    )
+    args = parser.parse_args()
+    
+    # 确定是否排除val数据集
+    exclude_val = args.exclude_val
+    if args.include_all:
+        exclude_val = False
+    
     print(f"\n{'='*80}")
     print("Image Matching Results Analysis")
+    if exclude_val:
+        print("Mode: Section 5.2 (Test datasets only, excluding sfxs_val)")
+    else:
+        print("Mode: All datasets (including sfxs_val)")
     print(f"{'='*80}\n")
     
     # 1. 加载所有结果
-    all_results = load_all_results()
+    all_results = load_all_results(exclude_val=exclude_val)
     
     if not all_results:
         print("[ERROR] No results found!")
         return
+    
+    print(f"\n[INFO] Loaded {len(all_results)} experiments for analysis")
     
     # 2. 打印摘要
     print_inliers_summary(all_results)
