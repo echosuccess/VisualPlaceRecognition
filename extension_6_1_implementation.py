@@ -118,7 +118,12 @@ class AdaptiveReranking:
         """
         Find optimal threshold using grid search
         
-        Strategy: try different thresholds, select the one with highest R@1 on validation set
+        Strategy: 
+        - Try different thresholds, select the one with highest R@1 on validation set
+        - Ensure the selected threshold does not cause problems:
+          * Rerank performance must be >= baseline (no rerank) performance
+          * Rerank ratio should not be too high (< 95% to avoid over-reranking)
+        - Following the principle: "find the highest value which does not have problems"
         """
         train_inliers = train_data['inliers']
         
@@ -129,30 +134,91 @@ class AdaptiveReranking:
         print(f"\nSearching for optimal threshold...")
         print(f"Candidate threshold range: {min(candidate_thresholds):.1f} - {max(candidate_thresholds):.1f}")
         
+        # Calculate baseline R@1 (no reranking)
+        baseline_r1 = self._calculate_baseline_r1(val_data)
+        print(f"Baseline R@1 (no rerank): {baseline_r1:.2%}")
+        
         best_threshold = None
         best_val_score = -1
         results = []
+        valid_thresholds = []
         
         for threshold in tqdm(candidate_thresholds):
             val_score, val_rerank_ratio = self._evaluate_threshold(
                 threshold, val_data
             )
             
+            # Check if this threshold is valid (no problems)
+            is_valid = True
+            problems = []
+            
+            # Problem 1: Performance should not decrease compared to baseline
+            if val_score < baseline_r1 - 0.001:  # Allow small numerical errors
+                is_valid = False
+                problems.append(f"R@1 decreased ({val_score:.2%} < {baseline_r1:.2%})")
+            
+            # Problem 2: Rerank ratio should not be too high (avoid over-reranking)
+            if val_rerank_ratio > 0.95:
+                is_valid = False
+                problems.append(f"Rerank ratio too high ({val_rerank_ratio:.1%} > 95%)")
+            
             results.append({
                 'threshold': threshold,
                 'val_r1': val_score,
-                'rerank_ratio': val_rerank_ratio
+                'rerank_ratio': val_rerank_ratio,
+                'is_valid': is_valid,
+                'problems': problems,
+                'improvement': val_score - baseline_r1
             })
             
-            if val_score > best_val_score:
-                best_val_score = val_score
-                best_threshold = threshold
+            # Only consider valid thresholds
+            if is_valid:
+                valid_thresholds.append({
+                    'threshold': threshold,
+                    'val_r1': val_score,
+                    'rerank_ratio': val_rerank_ratio,
+                    'improvement': val_score - baseline_r1
+                })
+                
+                if val_score > best_val_score:
+                    best_val_score = val_score
+                    best_threshold = threshold
         
-        self.threshold = best_threshold
-        print(f"\n[OK] Optimal threshold: {best_threshold:.1f}")
-        print(f"   Validation R@1: {best_val_score:.2%}")
+        # If no valid threshold found, use baseline (threshold = max, no reranking)
+        if best_threshold is None:
+            print(f"\n[WARN] No valid threshold found (all cause problems)")
+            print(f"   Using baseline (no reranking)")
+            self.threshold = np.max(train_inliers) + 1  # Set to max+1 to disable reranking
+            best_val_score = baseline_r1
+        else:
+            self.threshold = best_threshold
+            improvement = best_val_score - baseline_r1
+            best_rerank_ratio = next(r['rerank_ratio'] for r in valid_thresholds if r['threshold'] == best_threshold)
+            print(f"\n[OK] Optimal threshold: {best_threshold:.1f}")
+            print(f"   Validation R@1: {best_val_score:.2%} (improvement: {improvement:+.2%})")
+            print(f"   Re-rank ratio: {best_rerank_ratio:.1%}")
+            print(f"   Valid thresholds found: {len(valid_thresholds)}/{len(candidate_thresholds)}")
+        
+        # Add baseline info to results for plotting
+        for r in results:
+            r['baseline_r1'] = baseline_r1
         
         return results
+    
+    def _calculate_baseline_r1(self, data: Dict) -> float:
+        """
+        Calculate baseline R@1 without reranking (using original top-1 predictions)
+        """
+        predictions = data['predictions']
+        positives_per_query = data['positives_per_query']
+        
+        correct_count = 0
+        for q_idx, pred_indices in enumerate(predictions):
+            top1_pred = pred_indices[0]
+            is_correct = top1_pred in positives_per_query[q_idx]
+            correct_count += int(is_correct)
+        
+        return correct_count / len(predictions)
     
     def _evaluate_threshold(self, threshold: float, data: Dict) -> Tuple[float, float]:
         """
@@ -363,35 +429,89 @@ def plot_threshold_analysis(results: List[Dict], save_path: Path):
     Plot threshold analysis
     
     Args:
-        results: list containing threshold, val_r1, rerank_ratio
+        results: list containing threshold, val_r1, rerank_ratio, is_valid, improvement
         save_path: save path
     """
+    if not results:
+        print("[WARN] No results to plot")
+        return
+    
     thresholds = [r['threshold'] for r in results]
     val_r1 = [r['val_r1'] for r in results]
     rerank_ratios = [r['rerank_ratio'] for r in results]
     
-    fig, ax1 = plt.subplots(figsize=(10, 6))
+    # Get baseline R@1 from results (added in fit_threshold)
+    baseline_r1 = results[0].get('baseline_r1', None)
+    if baseline_r1 is None:
+        # Fallback: use the result with highest threshold (likely no reranking)
+        max_threshold_idx = np.argmax(thresholds)
+        baseline_r1 = val_r1[max_threshold_idx]
     
+    # Separate valid and invalid thresholds
+    valid_thresholds = [t for i, t in enumerate(thresholds) if results[i].get('is_valid', True)]
+    valid_r1 = [r['val_r1'] for i, r in enumerate(results) if results[i].get('is_valid', True)]
+    invalid_thresholds = [t for i, t in enumerate(thresholds) if not results[i].get('is_valid', True)]
+    invalid_r1 = [r['val_r1'] for i, r in enumerate(results) if not results[i].get('is_valid', True)]
+    
+    fig, ax1 = plt.subplots(figsize=(12, 7))
+    
+    # Plot baseline R@1 line
+    ax1.axhline(y=baseline_r1, color='gray', linestyle=':', linewidth=2, 
+                label=f'Baseline R@1: {baseline_r1:.2%}', alpha=0.7)
+    
+    # Plot all R@1 values
     color = 'tab:blue'
     ax1.set_xlabel('Threshold (inliers count)', fontsize=12)
     ax1.set_ylabel('R@1 on Validation', color=color, fontsize=12)
-    ax1.plot(thresholds, val_r1, color=color, marker='o', label='R@1')
+    
+    # Plot valid thresholds in green
+    if valid_thresholds:
+        ax1.plot(valid_thresholds, valid_r1, color='green', marker='o', 
+                markersize=6, label='Valid Thresholds', linewidth=2, alpha=0.7)
+    
+    # Plot invalid thresholds in red
+    if invalid_thresholds:
+        ax1.plot(invalid_thresholds, invalid_r1, color='red', marker='x', 
+                markersize=6, label='Invalid Thresholds (causes problems)', linewidth=1, alpha=0.5)
+    
+    # Plot all points connected with a line for better visualization
+    ax1.plot(thresholds, val_r1, color=color, marker='o', markersize=4, 
+            alpha=0.3, linewidth=1, linestyle='--', label='All Thresholds')
+    
     ax1.tick_params(axis='y', labelcolor=color)
     ax1.grid(True, alpha=0.3)
+    
+    # Find best valid threshold
+    valid_results = [r for r in results if r.get('is_valid', True)]
+    if valid_results:
+        best_valid = max(valid_results, key=lambda x: x['val_r1'])
+        best_threshold = best_valid['threshold']
+        best_r1 = best_valid['val_r1']
+        ax1.axvline(x=best_threshold, color='green', linestyle='--', linewidth=2, 
+                    label=f'Selected Threshold: {best_threshold:.1f}')
+        ax1.plot(best_threshold, best_r1, color='green', marker='*', 
+                markersize=15, label='Best Valid Threshold', zorder=5)
+    else:
+        # No valid threshold, use baseline
+        best_threshold = max(thresholds)
+        best_r1 = baseline_r1
     
     ax2 = ax1.twinx()
     color = 'tab:red'
     ax2.set_ylabel('Re-ranking Ratio', color=color, fontsize=12)
-    ax2.plot(thresholds, rerank_ratios, color=color, marker='s', label='Re-rank Ratio')
+    ax2.plot(thresholds, rerank_ratios, color=color, marker='s', markersize=4, 
+            label='Re-rank Ratio', alpha=0.6, linewidth=1)
     ax2.tick_params(axis='y', labelcolor=color)
+    ax2.axhline(y=0.95, color='orange', linestyle='--', linewidth=1, 
+                label='95% Limit', alpha=0.5)
     
-    best_idx = np.argmax(val_r1)
-    best_threshold = thresholds[best_idx]
-    best_r1 = val_r1[best_idx]
-    ax1.axvline(x=best_threshold, color='green', linestyle='--', linewidth=2, 
-                label=f'Best Threshold: {best_threshold:.1f}')
+    # Combine legends
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=9)
     
-    plt.title('Threshold Selection: R@1 vs Re-ranking Ratio', fontsize=14, fontweight='bold')
+    plt.title('Threshold Selection: R@1 vs Re-ranking Ratio\n(Following: "Find highest value without problems")', 
+              fontsize=14, fontweight='bold')
     fig.tight_layout()
     
     save_path = Path(save_path)
