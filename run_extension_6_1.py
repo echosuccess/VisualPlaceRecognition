@@ -425,26 +425,77 @@ class Extension61Pipeline:
         if not hasattr(self, 'test_results'):
             return
         
-        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
         
-        methods = [r['method'] for r in self.test_results]
-        r1_scores = [r['r1_without_rerank'] for r in self.test_results]
+        # Create labels with full experiment configuration
+        labels = []
+        r1_scores_with_rerank = []
+        r1_scores_without_rerank = []
+        cost_savings = []
+        colors_r1 = []
+        colors_cost = []
         
-        axes[0].bar(range(len(methods)), r1_scores)
-        axes[0].set_xlabel('Method')
-        axes[0].set_ylabel('R@1')
-        axes[0].set_title('R@1 Comparison')
-        axes[0].set_xticks(range(len(methods)))
-        axes[0].set_xticklabels(methods, rotation=45, ha='right')
+        for r in self.test_results:
+            # Create descriptive label: "vpr+im\ndataset (method)"
+            label = f"{r['vpr']}+{r['im']}\n{r['dataset']} ({r['method']})"
+            labels.append(label)
+            
+            # Use R@1 with rerank for comparison (shows improvement)
+            r1_scores_with_rerank.append(r.get('r1_with_rerank', r.get('r1_without_rerank', 0)))
+            r1_scores_without_rerank.append(r.get('r1_without_rerank', 0))
+            cost_savings.append(r.get('cost_saving', 0))
+            
+            # Color coding: blue for threshold, orange for logistic
+            if r['method'] == 'threshold':
+                colors_r1.append('#1f77b4')  # blue
+                colors_cost.append('#2ca02c')  # green
+            else:
+                colors_r1.append('#ff7f0e')  # orange
+                colors_cost.append('#ff7f0e')  # orange
         
-        cost_savings = [r['cost_saving'] for r in self.test_results]
+        # Left plot: R@1 Comparison (with rerank)
+        x_pos = np.arange(len(labels))
+        bars1 = axes[0].bar(x_pos, r1_scores_with_rerank, color=colors_r1, alpha=0.7)
+        axes[0].set_xlabel('Experiment Configuration', fontsize=11)
+        axes[0].set_ylabel('R@1 (with rerank)', fontsize=11)
+        axes[0].set_title('R@1 Comparison: Threshold vs Logistic Regression', fontsize=12, fontweight='bold')
+        axes[0].set_xticks(x_pos)
+        axes[0].set_xticklabels(labels, rotation=45, ha='right', fontsize=9)
+        axes[0].grid(True, alpha=0.3, axis='y')
+        axes[0].set_ylim([0, max(r1_scores_with_rerank) * 1.1])
         
-        axes[1].bar(range(len(methods)), cost_savings, color='green')
-        axes[1].set_xlabel('Method')
-        axes[1].set_ylabel('Cost Saving')
-        axes[1].set_title('Cost Saving Comparison')
-        axes[1].set_xticks(range(len(methods)))
-        axes[1].set_xticklabels(methods, rotation=45, ha='right')
+        # Add value labels on bars
+        for i, (bar, score) in enumerate(zip(bars1, r1_scores_with_rerank)):
+            height = bar.get_height()
+            axes[0].text(bar.get_x() + bar.get_width()/2., height,
+                        f'{score:.2f}',
+                        ha='center', va='bottom', fontsize=8)
+        
+        # Right plot: Cost Saving Comparison
+        bars2 = axes[1].bar(x_pos, cost_savings, color=colors_cost, alpha=0.7)
+        axes[1].set_xlabel('Experiment Configuration', fontsize=11)
+        axes[1].set_ylabel('Cost Saving', fontsize=11)
+        axes[1].set_title('Cost Saving Comparison: Threshold vs Logistic Regression', fontsize=12, fontweight='bold')
+        axes[1].set_xticks(x_pos)
+        axes[1].set_xticklabels(labels, rotation=45, ha='right', fontsize=9)
+        axes[1].grid(True, alpha=0.3, axis='y')
+        axes[1].set_ylim([0, max(cost_savings) * 1.1 if max(cost_savings) > 0 else 0.1])
+        
+        # Add value labels on bars
+        for i, (bar, saving) in enumerate(zip(bars2, cost_savings)):
+            height = bar.get_height()
+            axes[1].text(bar.get_x() + bar.get_width()/2., height,
+                        f'{saving:.2f}',
+                        ha='center', va='bottom', fontsize=8)
+        
+        # Add legend
+        from matplotlib.patches import Patch
+        legend_elements = [
+            Patch(facecolor='#1f77b4', alpha=0.7, label='Threshold Method'),
+            Patch(facecolor='#ff7f0e', alpha=0.7, label='Logistic Regression Method')
+        ]
+        axes[0].legend(handles=legend_elements, loc='upper right', fontsize=9)
+        axes[1].legend(handles=legend_elements, loc='upper right', fontsize=9)
         
         plt.tight_layout()
         save_path = Path("results/extension_6_1/comparison.png")
