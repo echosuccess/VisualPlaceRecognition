@@ -1,11 +1,15 @@
 mydoc/
 data/
 logs/baseline/
-models/
+models/extension_6_1/
 trained_models/
 count_dataset_images.py
 list_actual_result_files.py
 verify_vpr_data_integrity.py
+analyze_abnormal_files.py
+check_all_experiments_colab.py
+check_all_results_colab.py
+compare_sfxs_val_results.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
