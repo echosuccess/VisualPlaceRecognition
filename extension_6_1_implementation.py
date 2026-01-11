@@ -505,10 +505,11 @@ def plot_threshold_analysis(results: List[Dict], save_path: Path):
     ax2.axhline(y=0.95, color='orange', linestyle='--', linewidth=1, 
                 label='95% Limit', alpha=0.5)
     
-    # Combine legends
+    # Combine legends - place in bottom right to avoid overlapping with title and data
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=9)
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='lower right', fontsize=9, 
+               framealpha=0.9, fancybox=True, shadow=True)
     
     plt.title('Threshold Selection: R@1 vs Re-ranking Ratio\n(Following: "Find highest value without problems")', 
               fontsize=14, fontweight='bold')

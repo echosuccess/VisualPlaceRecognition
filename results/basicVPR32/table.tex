@@ -4,37 +4,44 @@
 \hline
 Method & Dataset & Distance & R@1 & R@5 & R@10 & R@20 \\
 \hline
-cosplace & SF-XS & dot_product & 63.1 & 74.8 & 78.6 & 81.3 \\
+% SF-XS Test
+cosplace & SF-XS & dot\_product & 63.1 & 74.8 & 78.6 & 81.3 \\
 cosplace & SF-XS & l2 & 63.1 & 74.8 & 78.6 & 81.3 \\
-megaloc & SF-XS & dot_product & 85.6 & 89.4 & 90.0 & 90.7 \\
+megaloc & SF-XS & dot\_product & 85.6 & 89.4 & 90.0 & 90.7 \\
 megaloc & SF-XS & l2 & 85.6 & 89.4 & 90.0 & 90.7 \\
-mixvpr & SF-XS & dot_product & 70.2 & 79.0 & 81.3 & 83.9 \\
+mixvpr & SF-XS & dot\_product & 70.2 & 79.0 & 81.3 & 83.9 \\
 mixvpr & SF-XS & l2 & 70.2 & 79.0 & 81.3 & 83.9 \\
-netvlad & SF-XS & dot_product & 42.3 & 53.7 & 60.8 & 65.2 \\
+netvlad & SF-XS & dot\_product & 42.3 & 53.7 & 60.8 & 65.2 \\
 netvlad & SF-XS & l2 & 42.3 & 53.7 & 60.8 & 65.2 \\
-cosplace & SVOX & dot_product & 33.3 & 51.5 & 59.1 & 67.7 \\
-cosplace & SVOX & dot_product & 96.3 & 97.9 & 98.3 & 98.7 \\
-cosplace & SVOX & l2 & 33.3 & 51.5 & 59.1 & 67.7 \\
-cosplace & SVOX & l2 & 96.3 & 97.9 & 98.3 & 98.7 \\
-megaloc & SVOX & dot_product & 91.5 & 96.7 & 97.6 & 98.3 \\
-megaloc & SVOX & dot_product & 98.5 & 99.4 & 99.6 & 99.7 \\
-megaloc & SVOX & l2 & 91.5 & 96.7 & 97.6 & 98.3 \\
-megaloc & SVOX & l2 & 98.5 & 99.4 & 99.6 & 99.7 \\
-mixvpr & SVOX & dot_product & 63.1 & 79.8 & 84.1 & 88.0 \\
-mixvpr & SVOX & dot_product & 97.8 & 98.9 & 99.1 & 99.3 \\
-mixvpr & SVOX & l2 & 63.1 & 79.8 & 84.1 & 88.0 \\
-mixvpr & SVOX & l2 & 97.8 & 98.9 & 99.1 & 99.3 \\
-netvlad & SVOX & dot_product & 8.5 & 18.2 & 22.7 & 29.5 \\
-netvlad & SVOX & dot_product & 86.6 & 93.7 & 95.5 & 97.0 \\
-netvlad & SVOX & l2 & 8.5 & 18.2 & 22.7 & 29.5 \\
-netvlad & SVOX & l2 & 86.6 & 93.7 & 95.5 & 97.0 \\
-cosplace & Tokyo-XS & dot_product & 64.8 & 79.7 & 86.0 & 89.5 \\
+\hline
+% SVOX Night Test
+cosplace & SVOX Night & dot\_product & 33.3 & 51.5 & 59.1 & 67.7 \\
+cosplace & SVOX Night & l2 & 33.3 & 51.5 & 59.1 & 67.7 \\
+megaloc & SVOX Night & dot\_product & 91.5 & 96.7 & 97.6 & 98.3 \\
+megaloc & SVOX Night & l2 & 91.5 & 96.7 & 97.6 & 98.3 \\
+mixvpr & SVOX Night & dot\_product & 63.1 & 79.8 & 84.1 & 88.0 \\
+mixvpr & SVOX Night & l2 & 63.1 & 79.8 & 84.1 & 88.0 \\
+netvlad & SVOX Night & dot\_product & 8.5 & 18.2 & 22.7 & 29.5 \\
+netvlad & SVOX Night & l2 & 8.5 & 18.2 & 22.7 & 29.5 \\
+\hline
+% SVOX Sun Test
+cosplace & SVOX Sun & dot\_product & 96.3 & 97.9 & 98.3 & 98.7 \\
+cosplace & SVOX Sun & l2 & 96.3 & 97.9 & 98.3 & 98.7 \\
+megaloc & SVOX Sun & dot\_product & 98.5 & 99.4 & 99.6 & 99.7 \\
+megaloc & SVOX Sun & l2 & 98.5 & 99.4 & 99.6 & 99.7 \\
+mixvpr & SVOX Sun & dot\_product & 97.8 & 98.9 & 99.1 & 99.3 \\
+mixvpr & SVOX Sun & l2 & 97.8 & 98.9 & 99.1 & 99.3 \\
+netvlad & SVOX Sun & dot\_product & 86.6 & 93.7 & 95.5 & 97.0 \\
+netvlad & SVOX Sun & l2 & 86.6 & 93.7 & 95.5 & 97.0 \\
+\hline
+% Tokyo-XS Test
+cosplace & Tokyo-XS & dot\_product & 64.8 & 79.7 & 86.0 & 89.5 \\
 cosplace & Tokyo-XS & l2 & 64.8 & 79.7 & 86.0 & 89.5 \\
-megaloc & Tokyo-XS & dot_product & 94.9 & 97.8 & 98.4 & 98.7 \\
+megaloc & Tokyo-XS & dot\_product & 94.9 & 97.8 & 98.4 & 98.7 \\
 megaloc & Tokyo-XS & l2 & 94.9 & 97.8 & 98.4 & 98.7 \\
-mixvpr & Tokyo-XS & dot_product & 77.8 & 89.5 & 92.4 & 93.7 \\
+mixvpr & Tokyo-XS & dot\_product & 77.8 & 89.5 & 92.4 & 93.7 \\
 mixvpr & Tokyo-XS & l2 & 77.8 & 89.5 & 92.4 & 93.7 \\
-netvlad & Tokyo-XS & dot_product & 54.0 & 64.4 & 69.5 & 74.6 \\
+netvlad & Tokyo-XS & dot\_product & 54.0 & 64.4 & 69.5 & 74.6 \\
 netvlad & Tokyo-XS & l2 & 54.0 & 64.4 & 69.5 & 74.6 \\
 \hline
 \end{tabular}
