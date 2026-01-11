@@ -84,5 +84,45 @@ python -m vpr_uncertainty.eval \
 
 
 
+## Scripts Overview
+
+This project contains several Python scripts for different purposes. Here's a brief overview:
+
+### Main Experiment Scripts
+
+- **`run_baseline_experiments.py`**: Runs VPR baseline experiments systematically for all VPR methods, distance metrics, and datasets.
+
+- **`run_image_matching_baseline.py`**: Runs image matching experiments on VPR predictions. Matches top-K predictions for each query using specified matchers (SuperGlue, LoFTR, SuperPoint-LG) and analyzes inlier counts vs prediction correctness.
+
+- **`run_extension_6_1.py`**: Full pipeline for Extension 6.1 (Adaptive Re-ranking). Automates data preparation, threshold/logistic regression training, evaluation, and visualization.
+
+- **`run_sfxs_val_vpr.py`**: Runs VPR experiments specifically for SF-XS validation set.
+
+- **`run_sfxs_val_image_matching.py`**: Runs image matching experiments specifically for SF-XS validation set.
+
+### Core Implementation
+
+- **`extension_6_1_implementation.py`**: Core implementation of adaptive re-ranking (Extension 6.1). Contains `AdaptiveReranking` class with hard threshold and logistic regression methods, plus visualization functions.
+
+- **`reranking.py`**: Basic re-ranking script that re-ranks VPR predictions based on inlier counts from image matching results.
+
+
+### Analysis and Verification Scripts
+
+- **`analyze_baseline_results.py`**: Analyzes all VPR baseline experiment results. Collects Recall@N metrics from log files and generates comparison tables (CSV and LaTeX formats).
+
+- **`analyze_image_matching_results.py`**: Analyzes image matching results. Generates statistics, visualizations (discrimination ratio plots, inlier distributions), and LaTeX tables comparing different matchers and VPR methods.
+
+- **`verify_image_matching_result.py`**: Verifies integrity of image matching result files (JSON/PKL). Checks data consistency, file completeness, and validates against VPR logs.
+
+- **`check_all_experiments_with_sfxs_val.py`**: Checks completion status of all experiments including SF-XS validation set.
+
+### Utility and Helper Scripts
+
+
+- **`colab_experiments_batches.py`**: Manages experiment batches for Colab execution. Lists, runs, and prints commands for different experiment batches.
+
+---
+
 Version：
  python 3.11.6
