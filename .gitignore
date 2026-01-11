@@ -1,5 +1,8 @@
 mydoc/
 data/
+logs/baseline/
+models/
+trained_models/
 count_dataset_images.py
 list_actual_result_files.py
 verify_vpr_data_integrity.py
