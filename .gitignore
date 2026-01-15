@@ -3,6 +3,7 @@ data/
 logs/baseline/
 models/extension_6_1/
 trained_models/
+results/image_matching/
 count_dataset_images.py
 list_actual_result_files.py
 verify_vpr_data_integrity.py
